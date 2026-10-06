@@ -36,6 +36,7 @@ import { SchoolModal } from './components/SchoolModal';
 import { StudentCriteriaModal } from './components/StudentCriteriaModal';
 import { CriteriaManagementModal } from './components/CriteriaManagementModal';
 import { MobileInstallModal } from './components/MobileInstallModal';
+import { FirebaseDomainGuideModal } from './components/FirebaseDomainGuideModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { CheckCircle2, X } from 'lucide-react';
 
@@ -118,6 +119,7 @@ export default function App() {
   const [isCriteriaManagementOpen, setIsCriteriaManagementOpen] = useState(false);
   const [selectedStudentForCriteria, setSelectedStudentForCriteria] = useState<Student | null>(null);
   const [isMobileInstallOpen, setIsMobileInstallOpen] = useState(false);
+  const [isDomainGuideOpen, setIsDomainGuideOpen] = useState(false);
   const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -298,12 +300,43 @@ export default function App() {
           type: 'success',
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign in error:', error);
-      setGlobalToast({
-        message: 'Google ile giriş iptal edildi veya bir hata oluştu.',
-        type: 'info',
-      });
+      const errorCode = error?.code || '';
+      const errorMessage = error?.message || '';
+
+      if (
+        errorCode === 'auth/unauthorized-domain' ||
+        errorMessage.includes('unauthorized-domain') ||
+        errorMessage.includes('authorized domain')
+      ) {
+        setIsDomainGuideOpen(true);
+        setGlobalToast({
+          message: 'Vercel alan adı izni gerekli: Firebase ayarlarından alan adınızı onaylamalısınız.',
+          type: 'error',
+        });
+      } else if (errorCode === 'auth/popup-blocked') {
+        setGlobalToast({
+          message: 'Tarayıcınız açılır pencereyi engelledi. Lütfen açılır pencerelere izin verip tekrar deneyin.',
+          type: 'error',
+        });
+      } else if (errorCode === 'auth/popup-closed-by-user') {
+        setGlobalToast({
+          message: 'Google giriş penceresi kapatıldı.',
+          type: 'info',
+        });
+      } else if (errorCode === 'auth/operation-not-allowed') {
+        setIsDomainGuideOpen(true);
+        setGlobalToast({
+          message: 'Firebase Console üzerinde Google ile Giriş yöntemi aktif edilmemiş olabilir.',
+          type: 'error',
+        });
+      } else {
+        setGlobalToast({
+          message: 'Google ile giriş iptal edildi veya bir hata oluştu.',
+          type: 'info',
+        });
+      }
     }
   };
 
@@ -972,6 +1005,7 @@ export default function App() {
         onLogOut={handleLogOut}
         onSaveToCloud={handleManualSaveToCloud}
         isCloudSyncing={isCloudSyncing}
+        onOpenDomainHelp={() => setIsDomainGuideOpen(true)}
       />
 
       {/* Random Student Modal */}
@@ -1057,6 +1091,12 @@ export default function App() {
         onClose={() => setIsMobileInstallOpen(false)}
         onSyncToLink={handleSyncToLink}
         isSyncing={isSyncing}
+      />
+
+      {/* Firebase Vercel Domain Guide Modal */}
+      <FirebaseDomainGuideModal
+        isOpen={isDomainGuideOpen}
+        onClose={() => setIsDomainGuideOpen(false)}
       />
 
       {/* Offline Mode Indicator */}

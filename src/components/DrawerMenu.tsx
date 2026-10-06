@@ -47,6 +47,7 @@ interface DrawerMenuProps {
   onLogOut?: () => void;
   onSaveToCloud?: () => void;
   isCloudSyncing?: boolean;
+  onOpenDomainHelp?: () => void;
 }
 
 export const DrawerMenu: React.FC<DrawerMenuProps> = ({
@@ -70,6 +71,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
   onLogOut,
   onSaveToCloud,
   isCloudSyncing = false,
+  onOpenDomainHelp,
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -226,6 +228,16 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Google ile Giriş Yap & Eşitle</span>
+                </button>
+              )}
+              {onOpenDomainHelp && (
+                <button
+                  type="button"
+                  onClick={onOpenDomainHelp}
+                  className="w-full text-center text-[11px] text-teal-700 hover:text-teal-900 hover:underline flex items-center justify-center gap-1 pt-0.5 cursor-pointer"
+                >
+                  <HelpCircle className="w-3 h-3 text-teal-600 shrink-0" />
+                  <span>Vercel'de Google Giriş izni nasıl verilir?</span>
                 </button>
               )}
             </div>
