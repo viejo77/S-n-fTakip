@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   initialSchoolInfo,
   initialClasses,
@@ -19,6 +19,7 @@ import {
   logOut,
   saveWorkspaceToCloud,
   fetchWorkspaceFromCloud,
+  subscribeToWorkspace,
   testConnection,
 } from './services/firebase';
 import { User, onAuthStateChanged } from 'firebase/auth';
@@ -127,6 +128,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   const [isCloudConnected, setIsCloudConnected] = useState(false);
+  const isInitialCloudSyncDoneRef = useRef(false);
+  const isSavingToCloudRef = useRef(false);
+  const lastCloudUpdateTimestampRef = useRef<string>('');
 
   // Sync to LocalStorage & generate smart share link with state
   const handleSyncToLink = () => {
@@ -212,43 +216,82 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      if (user) {
-        setIsCloudSyncing(true);
-        try {
-          const cloudData = await fetchWorkspaceFromCloud(user.uid);
-          if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
-            setSchoolInfo(cloudData.schoolInfo);
-            setClasses(cloudData.classes);
-            setScheduleSlots(cloudData.scheduleSlots || []);
-            setCriteria(cloudData.criteria || []);
-            if (cloudData.classes[0]?.id) setActiveClassId(cloudData.classes[0].id);
-            setGlobalToast({
-              message: `✓ Bulut veritabanı bağlandı! (${cloudData.classes.length} sınıf eşitlendi)`,
-              type: 'success',
-            });
-          } else {
-            // First time this Google user logs in: save existing local classes to cloud!
-            await saveWorkspaceToCloud(user.uid, {
-              schoolInfo,
-              classes,
-              scheduleSlots,
-              criteria,
-            });
-            setGlobalToast({
-              message: '✓ Sınıflarınız ve öğrencileriniz Google Firebase bulutuna kaydedildi!',
-              type: 'success',
-            });
-          }
-        } catch (e) {
-          console.error('Failed to sync on auth change:', e);
-        } finally {
-          setIsCloudSyncing(false);
+      if (!user) {
+        isInitialCloudSyncDoneRef.current = false;
+        return;
+      }
+
+      setIsCloudSyncing(true);
+      try {
+        const cloudData = await fetchWorkspaceFromCloud(user.uid);
+        if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
+          setSchoolInfo(cloudData.schoolInfo);
+          setClasses(cloudData.classes);
+          setScheduleSlots(cloudData.scheduleSlots || []);
+          setCriteria(cloudData.criteria || []);
+          if (cloudData.classes[0]?.id) setActiveClassId(cloudData.classes[0].id);
+          lastCloudUpdateTimestampRef.current = cloudData.updatedAt || '';
+          setGlobalToast({
+            message: `✓ Bulut veritabanı bağlandı! (${cloudData.classes.length} sınıf eşitlendi)`,
+            type: 'success',
+          });
+        } else {
+          // First time this Google user logs in: save existing local classes to cloud!
+          await saveWorkspaceToCloud(user.uid, {
+            schoolInfo,
+            classes,
+            scheduleSlots,
+            criteria,
+          });
+          setGlobalToast({
+            message: '✓ Sınıflarınız ve öğrencileriniz Google Firebase bulutuna kaydedildi!',
+            type: 'success',
+          });
         }
+      } catch (e) {
+        console.error('Failed to sync on auth change:', e);
+      } finally {
+        setIsCloudSyncing(false);
+        // Only allow automatic writes AFTER initial cloud sync check completes!
+        isInitialCloudSyncDoneRef.current = true;
       }
     });
 
     return () => unsubscribe();
   }, []);
+
+  // Realtime Cloud Synchronization across Devices (Computer, Phone, Tablet)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribeRealtime = subscribeToWorkspace(
+      currentUser.uid,
+      (cloudData) => {
+        // If we are currently saving to cloud ourselves, ignore our own echo
+        if (isSavingToCloudRef.current) return;
+
+        if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
+          if (cloudData.updatedAt && cloudData.updatedAt === lastCloudUpdateTimestampRef.current) {
+            return;
+          }
+          lastCloudUpdateTimestampRef.current = cloudData.updatedAt || '';
+          setSchoolInfo(cloudData.schoolInfo);
+          setClasses(cloudData.classes);
+          setScheduleSlots(cloudData.scheduleSlots || []);
+          setCriteria(cloudData.criteria || []);
+          setGlobalToast({
+            message: `✓ Cihazlar arası bulut senkronizasyonu güncellendi! (${cloudData.classes.length} sınıf)`,
+            type: 'success',
+          });
+        }
+      },
+      (err) => {
+        console.error('Realtime sync listener error:', err);
+      }
+    );
+
+    return () => unsubscribeRealtime();
+  }, [currentUser]);
 
   // 40-minute Lesson Timer
   const [timerMinutes, setTimerMinutes] = useState(40);
@@ -270,10 +313,14 @@ export default function App() {
       console.error('Failed to save to localStorage', e);
     }
 
-    if (currentUser) {
+    // Only auto-save to cloud if user is logged in AND initial cloud fetch has completed!
+    if (currentUser && isInitialCloudSyncDoneRef.current) {
       const timer = setTimeout(async () => {
         try {
+          isSavingToCloudRef.current = true;
           setIsCloudSyncing(true);
+          const timestamp = new Date().toISOString();
+          lastCloudUpdateTimestampRef.current = timestamp;
           await saveWorkspaceToCloud(currentUser.uid, {
             schoolInfo,
             classes,
@@ -283,9 +330,12 @@ export default function App() {
         } catch (e) {
           console.error('Failed to sync to cloud:', e);
         } finally {
-          setTimeout(() => setIsCloudSyncing(false), 400);
+          setTimeout(() => {
+            setIsCloudSyncing(false);
+            isSavingToCloudRef.current = false;
+          }, 400);
         }
-      }, 800);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [schoolInfo, classes, scheduleSlots, criteria, currentUser]);
@@ -359,7 +409,10 @@ export default function App() {
       return;
     }
     setIsCloudSyncing(true);
+    isSavingToCloudRef.current = true;
     try {
+      const timestamp = new Date().toISOString();
+      lastCloudUpdateTimestampRef.current = timestamp;
       await saveWorkspaceToCloud(currentUser.uid, {
         schoolInfo,
         classes,
@@ -376,7 +429,10 @@ export default function App() {
         type: 'error',
       });
     } finally {
-      setIsCloudSyncing(false);
+      setTimeout(() => {
+        setIsCloudSyncing(false);
+        isSavingToCloudRef.current = false;
+      }, 400);
     }
   };
 
@@ -389,6 +445,7 @@ export default function App() {
     try {
       const cloudData = await fetchWorkspaceFromCloud(currentUser.uid);
       if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
+        lastCloudUpdateTimestampRef.current = cloudData.updatedAt || '';
         setSchoolInfo(cloudData.schoolInfo);
         setClasses(cloudData.classes);
         setScheduleSlots(cloudData.scheduleSlots || []);
@@ -411,6 +468,7 @@ export default function App() {
       });
     } finally {
       setIsCloudSyncing(false);
+      isInitialCloudSyncDoneRef.current = true;
     }
   };
 
