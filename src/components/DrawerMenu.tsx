@@ -46,6 +46,7 @@ interface DrawerMenuProps {
   onSignInWithGoogle?: () => void;
   onLogOut?: () => void;
   onSaveToCloud?: () => void;
+  onFetchFromCloud?: () => void;
   isCloudSyncing?: boolean;
   onOpenDomainHelp?: () => void;
 }
@@ -70,6 +71,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
   onSignInWithGoogle,
   onLogOut,
   onSaveToCloud,
+  onFetchFromCloud,
   isCloudSyncing = false,
   onOpenDomainHelp,
 }) => {
@@ -192,29 +194,48 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 pt-1">
+              <div className="grid grid-cols-2 gap-1.5 pt-1">
                 {onSaveToCloud && (
                   <button
                     onClick={onSaveToCloud}
                     disabled={isCloudSyncing}
-                    className="flex-1 py-1.5 px-2 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="py-1.5 px-2 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                    title="Bu ekrandaki sınıfları Google bulutuna kaydet"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isCloudSyncing ? 'animate-spin' : ''}`} />
-                    <span>{isCloudSyncing ? 'Kaydediliyor...' : 'Buluta Kaydet'}</span>
+                    <Upload className="w-3 h-3 shrink-0" />
+                    <span>{isCloudSyncing ? 'Kaydediliyor...' : 'Buluta Yükle'}</span>
                   </button>
                 )}
 
-                {onLogOut && (
+                {onFetchFromCloud && (
                   <button
-                    onClick={onLogOut}
-                    className="py-1.5 px-2.5 bg-white hover:bg-slate-100 text-slate-600 hover:text-rose-600 border border-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                    title="Çıkış Yap"
+                    onClick={onFetchFromCloud}
+                    disabled={isCloudSyncing}
+                    className="py-1.5 px-2 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                    title="Buluttaki güncel sınıfları bu ekrana çek"
                   >
-                    <LogOut className="w-3 h-3" />
-                    <span>Çıkış</span>
+                    <Download className="w-3 h-3 shrink-0" />
+                    <span>Buluttan Çek</span>
                   </button>
                 )}
               </div>
+
+              {onLogOut && (
+                <div className="flex items-center justify-between pt-0.5 px-0.5">
+                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Bulut Aktif
+                  </span>
+                  <button
+                    onClick={onLogOut}
+                    className="py-0.5 px-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Google Oturumunu Kapat"
+                  >
+                    <LogOut className="w-3 h-3" />
+                    <span>Çıkış Yap</span>
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-2">

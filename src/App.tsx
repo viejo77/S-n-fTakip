@@ -380,6 +380,40 @@ export default function App() {
     }
   };
 
+  const handleFetchFromCloud = async () => {
+    if (!currentUser) {
+      handleSignInWithGoogle();
+      return;
+    }
+    setIsCloudSyncing(true);
+    try {
+      const cloudData = await fetchWorkspaceFromCloud(currentUser.uid);
+      if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
+        setSchoolInfo(cloudData.schoolInfo);
+        setClasses(cloudData.classes);
+        setScheduleSlots(cloudData.scheduleSlots || []);
+        setCriteria(cloudData.criteria || []);
+        if (cloudData.classes[0]?.id) setActiveClassId(cloudData.classes[0].id);
+        setGlobalToast({
+          message: `✓ Buluttan veriler başarıyla çekildi! (${cloudData.classes.length} sınıf)`,
+          type: 'success',
+        });
+      } else {
+        setGlobalToast({
+          message: 'Bulutta henüz kayıtlı bir sınıf bulunamadı.',
+          type: 'info',
+        });
+      }
+    } catch (e) {
+      setGlobalToast({
+        message: 'Buluttan veri çekilirken bir hata oluştu.',
+        type: 'error',
+      });
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
   // Timer Tick
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -1004,6 +1038,7 @@ export default function App() {
         onSignInWithGoogle={handleSignInWithGoogle}
         onLogOut={handleLogOut}
         onSaveToCloud={handleManualSaveToCloud}
+        onFetchFromCloud={handleFetchFromCloud}
         isCloudSyncing={isCloudSyncing}
         onOpenDomainHelp={() => setIsDomainGuideOpen(true)}
       />
