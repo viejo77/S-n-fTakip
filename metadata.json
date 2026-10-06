@@ -1,0 +1,6 @@
+{
+  "name": "SınıfTakip+",
+  "description": "Öğretmenler için akıllı sınıf yönetimi, anlık ders katılım takibi ve ders programı uygulaması.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

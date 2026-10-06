@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "SınıfTakip+ | Akıllı Sınıf & Not Takibi",
+  "short_name": "SınıfTakip+",
+  "description": "Öğretmenler için akıllı sınıf yönetimi, anlık ders katılımı ve ölçüt bazlı not takip sistemi.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
