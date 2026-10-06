@@ -13,6 +13,15 @@ import {
   CriterionScoreHistory,
 } from './types';
 import { initialCriteria, getStudentCriterionScore } from './utils/criteria';
+import {
+  auth,
+  signInWithGoogle,
+  logOut,
+  saveWorkspaceToCloud,
+  fetchWorkspaceFromCloud,
+  testConnection,
+} from './services/firebase';
+import { User, onAuthStateChanged } from 'firebase/auth';
 import { Header } from './components/Header';
 import { DrawerMenu } from './components/DrawerMenu';
 import { OverviewScheduleView } from './components/OverviewScheduleView';
@@ -109,8 +118,13 @@ export default function App() {
   const [isCriteriaManagementOpen, setIsCriteriaManagementOpen] = useState(false);
   const [selectedStudentForCriteria, setSelectedStudentForCriteria] = useState<Student | null>(null);
   const [isMobileInstallOpen, setIsMobileInstallOpen] = useState(false);
-  const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Firebase Cloud State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
 
   // Sync to LocalStorage & generate smart share link with state
   const handleSyncToLink = () => {
@@ -126,10 +140,10 @@ export default function App() {
       
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
 
-      // Generate a share link containing the encoded state so it works seamlessly on any device
+      // Generate a share link containing the encoded state so it works seamlessly on any device or domain
       const jsonStr = JSON.stringify(stateToSave);
       const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
-      const baseShareUrl = 'https://ais-pre-d6h6duaquawsqjpt5t3pgf-26917758873.europe-west2.run.app';
+      const baseShareUrl = typeof window !== 'undefined' ? window.location.origin : 'https://ais-pre-d6h6duaquawsqjpt5t3pgf-26917758873.europe-west2.run.app';
       const shareUrlWithData = `${baseShareUrl}/#state=${encoded}`;
 
       if (navigator.clipboard) {
@@ -190,12 +204,56 @@ export default function App() {
     }
   }, []);
 
+  // Firebase Auth & Cloud Sync Initialization
+  useEffect(() => {
+    testConnection().then((ok) => setIsCloudConnected(ok));
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        setIsCloudSyncing(true);
+        try {
+          const cloudData = await fetchWorkspaceFromCloud(user.uid);
+          if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
+            setSchoolInfo(cloudData.schoolInfo);
+            setClasses(cloudData.classes);
+            setScheduleSlots(cloudData.scheduleSlots || []);
+            setCriteria(cloudData.criteria || []);
+            if (cloudData.classes[0]?.id) setActiveClassId(cloudData.classes[0].id);
+            setGlobalToast({
+              message: `✓ Bulut veritabanı bağlandı! (${cloudData.classes.length} sınıf eşitlendi)`,
+              type: 'success',
+            });
+          } else {
+            // First time this Google user logs in: save existing local classes to cloud!
+            await saveWorkspaceToCloud(user.uid, {
+              schoolInfo,
+              classes,
+              scheduleSlots,
+              criteria,
+            });
+            setGlobalToast({
+              message: '✓ Sınıflarınız ve öğrencileriniz Google Firebase bulutuna kaydedildi!',
+              type: 'success',
+            });
+          }
+        } catch (e) {
+          console.error('Failed to sync on auth change:', e);
+        } finally {
+          setIsCloudSyncing(false);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // 40-minute Lesson Timer
   const [timerMinutes, setTimerMinutes] = useState(40);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  // Sync to LocalStorage
+  // Sync to LocalStorage & Firebase Cloud (when logged in)
   useEffect(() => {
     try {
       const stateToSave = {
@@ -209,7 +267,85 @@ export default function App() {
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
-  }, [schoolInfo, classes, scheduleSlots, criteria]);
+
+    if (currentUser) {
+      const timer = setTimeout(async () => {
+        try {
+          setIsCloudSyncing(true);
+          await saveWorkspaceToCloud(currentUser.uid, {
+            schoolInfo,
+            classes,
+            scheduleSlots,
+            criteria,
+          });
+        } catch (e) {
+          console.error('Failed to sync to cloud:', e);
+        } finally {
+          setTimeout(() => setIsCloudSyncing(false), 400);
+        }
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [schoolInfo, classes, scheduleSlots, criteria, currentUser]);
+
+  // Auth & Cloud Action Handlers
+  const handleSignInWithGoogle = async () => {
+    try {
+      const user = await signInWithGoogle();
+      if (user) {
+        setGlobalToast({
+          message: `✓ Hoş geldiniz ${user.displayName || user.email}! Bulut veritabanı aktif.`,
+          type: 'success',
+        });
+      }
+    } catch (error) {
+      console.error('Sign in error:', error);
+      setGlobalToast({
+        message: 'Google ile giriş iptal edildi veya bir hata oluştu.',
+        type: 'info',
+      });
+    }
+  };
+
+  const handleLogOut = async () => {
+    try {
+      await logOut();
+      setCurrentUser(null);
+      setGlobalToast({
+        message: 'Google hesabından çıkış yapıldı. Verileriniz yerel hafızada korunuyor.',
+        type: 'info',
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleManualSaveToCloud = async () => {
+    if (!currentUser) {
+      handleSignInWithGoogle();
+      return;
+    }
+    setIsCloudSyncing(true);
+    try {
+      await saveWorkspaceToCloud(currentUser.uid, {
+        schoolInfo,
+        classes,
+        scheduleSlots,
+        criteria,
+      });
+      setGlobalToast({
+        message: '✓ Tüm sınıflar ve öğrenciler Google Firebase bulutuna kaydedildi!',
+        type: 'success',
+      });
+    } catch (e) {
+      setGlobalToast({
+        message: 'Bulut kaydetmede bir sorun oluştu.',
+        type: 'error',
+      });
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
 
   // Timer Tick
   useEffect(() => {
@@ -687,6 +823,10 @@ export default function App() {
         onSearchChange={setSearchQuery}
         isSearchOpen={isSearchOpen}
         onToggleSearch={() => setIsSearchOpen((prev) => !prev)}
+        currentUser={currentUser}
+        onSignInWithGoogle={handleSignInWithGoogle}
+        onSaveToCloud={handleManualSaveToCloud}
+        isCloudSyncing={isCloudSyncing}
       />
 
       {/* Main Content Area */}
@@ -827,6 +967,11 @@ export default function App() {
         onResetData={handleResetData}
         onSyncToLink={handleSyncToLink}
         onImportState={handleImportState}
+        currentUser={currentUser}
+        onSignInWithGoogle={handleSignInWithGoogle}
+        onLogOut={handleLogOut}
+        onSaveToCloud={handleManualSaveToCloud}
+        isCloudSyncing={isCloudSyncing}
       />
 
       {/* Random Student Modal */}

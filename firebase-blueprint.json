@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "Workspace": {
+      "title": "Teacher Workspace",
+      "description": "Contains the school info, classes, students, assessment criteria, and schedule for a teacher.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "The UID of the teacher owning this workspace"
+        },
+        "schoolInfo": {
+          "type": "object",
+          "description": "School and term information"
+        },
+        "classes": {
+          "type": "array",
+          "description": "List of classes and their enrolled students"
+        },
+        "scheduleSlots": {
+          "type": "array",
+          "description": "Weekly schedule slots"
+        },
+        "criteria": {
+          "type": "array",
+          "description": "Assessment criteria list"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["ownerId", "classes", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/workspaces/{workspaceId}": {
+      "schema": {
+        "$ref": "#/entities/Workspace"
+      },
+      "description": "Private workspace document for each teacher"
+    }
+  }
+}

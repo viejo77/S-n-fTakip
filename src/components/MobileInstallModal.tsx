@@ -41,8 +41,10 @@ export const MobileInstallModal: React.FC<MobileInstallModalProps> = ({
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  // App URL for sharing / QR code - Uses the shared public app URL
-  const appUrl = 'https://ais-pre-d6h6duaquawsqjpt5t3pgf-26917758873.europe-west2.run.app';
+  // App URL for sharing / QR code - Dynamically uses current deployment URL (Vercel, custom domain, etc.)
+  const appUrl = typeof window !== 'undefined' && window.location.origin
+    ? window.location.origin
+    : 'https://ais-pre-d6h6duaquawsqjpt5t3pgf-26917758873.europe-west2.run.app';
 
   useEffect(() => {
     if (isOpen) {

@@ -11,7 +11,11 @@ import {
   Table2,
   Smartphone,
   RefreshCw,
+  Cloud,
+  CheckCircle2,
+  LogIn,
 } from 'lucide-react';
+import { User } from 'firebase/auth';
 import { Logo } from './Logo';
 import { ClassGroup } from '../types';
 
@@ -30,6 +34,10 @@ interface HeaderProps {
   onSearchChange: (q: string) => void;
   isSearchOpen: boolean;
   onToggleSearch: () => void;
+  currentUser?: User | null;
+  onSignInWithGoogle?: () => void;
+  onSaveToCloud?: () => void;
+  isCloudSyncing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,6 +55,10 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   isSearchOpen,
   onToggleSearch,
+  currentUser,
+  onSignInWithGoogle,
+  onSaveToCloud,
+  isCloudSyncing = false,
 }) => {
   const activeClass = classes.find((c) => c.id === activeClassId) || classes[0];
 
@@ -165,6 +177,29 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="hidden sm:inline ml-1.5">Telefona Yükle</span>
               </button>
             )}
+
+            {/* Google Firebase Cloud Sync Button */}
+            {currentUser ? (
+              <button
+                onClick={onSaveToCloud}
+                disabled={isCloudSyncing}
+                className="p-1.5 sm:px-2.5 sm:py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer shrink-0 flex items-center gap-1.5"
+                title={`Google ile Bağlı (${currentUser.email}). Tıklayarak buluta manuel kaydedebilirsiniz.`}
+              >
+                <Cloud className={`w-3.5 h-3.5 text-teal-600 ${isCloudSyncing ? 'animate-bounce' : ''}`} />
+                <span className="hidden sm:inline">Bulut Eşit</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              </button>
+            ) : onSignInWithGoogle ? (
+              <button
+                onClick={onSignInWithGoogle}
+                className="p-1.5 sm:px-2.5 sm:py-2 bg-gradient-to-r from-teal-600 to-sky-600 hover:from-teal-700 hover:to-sky-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 flex items-center gap-1.5"
+                title="Google ile Giriş Yap (Vercel & tüm cihazlar arasında otomatik eşitlensin)"
+              >
+                <Cloud className="w-3.5 h-3.5 text-white" />
+                <span className="hidden sm:inline">Buluta Bağla</span>
+              </button>
+            ) : null}
 
             {/* Sync to Link Button */}
             {onSyncToLink && (

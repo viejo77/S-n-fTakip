@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: default-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidWorkspace(data) {
+      return data.ownerId is string && data.ownerId == request.auth.uid &&
+             data.classes is list && data.classes.size() <= 100 &&
+             data.updatedAt is string && data.updatedAt.size() <= 128;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow get: if workspaceId == 'connection-test' ||
+        (isSignedIn() && isValidId(workspaceId) &&
+        (workspaceId == request.auth.uid || resource.data.ownerId == request.auth.uid));
+
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn() && isValidId(workspaceId) &&
+        workspaceId == request.auth.uid &&
+        isValidWorkspace(incoming());
+
+      allow update: if isSignedIn() && isValidId(workspaceId) &&
+        workspaceId == request.auth.uid &&
+        existing().ownerId == request.auth.uid &&
+        isValidWorkspace(incoming()) &&
+        incoming().ownerId == existing().ownerId;
+
+      allow delete: if isSignedIn() && isValidId(workspaceId) &&
+        (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid);
+    }
+  }
+}
