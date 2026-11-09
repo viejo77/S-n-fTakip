@@ -17,6 +17,7 @@ import {
   Table2,
   CheckCircle2,
   Calendar,
+  Shuffle,
 } from 'lucide-react';
 import { AssessmentCriterion, ClassGroup, Student } from '../types';
 import {
@@ -42,6 +43,7 @@ interface CriteriaGradebookViewProps {
     score: number,
     reason?: string
   ) => void;
+  onOpenRandomPicker?: (criterionId?: string) => void;
 }
 
 export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
@@ -53,10 +55,12 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
   onOpenStudentCriteria,
   onQuickAdjustStudentScore,
   onSetStudentCriterionScore,
+  onOpenRandomPicker,
 }) => {
-  // Selected criterion: default to first criterion so the user gets a clean, zero-horizontal-scroll single-criterion view!
+  // Selected criterion: default to user's chosen isDefault criterion or first criterion!
   const [selectedCriterionId, setSelectedCriterionId] = useState<string>(() => {
-    return criteria[0]?.id || 'all';
+    const def = criteria.find((c) => c.isDefault) || criteria[0];
+    return def ? def.id : 'all';
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -525,13 +529,40 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-teal-100">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-teal-100">
               <div className="text-left sm:text-right mr-2">
                 <span className="text-[11px] text-slate-500 font-semibold block">Ölçüt Ortalaması</span>
                 <span className="text-lg font-mono font-black text-teal-900">
                   %{criteriaAverages[activeCriterion.id]?.toFixed(1) || '100'}
                 </span>
               </div>
+
+              {/* Per-Criterion Random Picker Button */}
+              {onOpenRandomPicker && (() => {
+                const eligible = activeClass.students.filter(
+                  (s) => s.attendance === 'present' || s.attendance === 'late'
+                );
+                const calledCount = eligible.filter(
+                  (s) => s.criterionCalled?.[activeCriterion.id]
+                ).length;
+                const remainingCount = eligible.length - calledCount;
+                const critRound = activeClass.criterionRounds?.[activeCriterion.id] || 1;
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onOpenRandomPicker(activeCriterion.id)}
+                    className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                    title={`"${activeCriterion.name}" ölçütünde henüz değerlendirilmemiş rastgele bir öğrenci seç`}
+                  >
+                    <Shuffle className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Rastgele Öğrenci Seç</span>
+                    <span className="bg-slate-800 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-700">
+                      {remainingCount} Kalan · {critRound}. Tur
+                    </span>
+                  </button>
+                );
+              })()}
 
               <button
                 type="button"
@@ -558,6 +589,7 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                 const step = activeCriterion.stepPoints || 10;
                 const { formatted: avgFormatted, badgeClass: avgBadgeClass } =
                   calculateStudentAverageGrade(criteria, st);
+                const isCalledInThisCriterion = Boolean(st.criterionCalled?.[activeCriterion.id]);
 
                 return (
                   <div
@@ -578,9 +610,22 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <span className="font-bold text-sm sm:text-base text-slate-900 truncate block">
-                          {st.name}
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm sm:text-base text-slate-900 truncate block">
+                            {st.name}
+                          </span>
+                          {/* Per-Criterion Evaluated Status Badge */}
+                          {isCalledInThisCriterion ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Kontrol Edildi</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                              <span>⏳ Sıra Bekliyor</span>
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${avgBadgeClass}`}>
                             Genel Ort: {avgFormatted}

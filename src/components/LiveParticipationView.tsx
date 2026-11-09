@@ -43,7 +43,7 @@ interface LiveParticipationViewProps {
   onOpenEditClass?: (classGroup: ClassGroup) => void;
   onDeleteClass?: (classId: string) => void;
   onOpenAddClass?: () => void;
-  onOpenRandomPicker: () => void;
+  onOpenRandomPicker: (criterionId?: string) => void;
   onOpenReport: () => void;
   onResetRound?: (classId: string) => void;
   onOpenStudentCriteria?: (student: Student) => void;
@@ -528,7 +528,7 @@ export const LiveParticipationView: React.FC<LiveParticipationViewProps> = ({
 
             {/* Random Student Picker */}
             <button
-              onClick={onOpenRandomPicker}
+              onClick={() => onOpenRandomPicker()}
               className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs font-bold shadow-xs hover:from-amber-600 hover:to-orange-600 active:scale-95 transition-all cursor-pointer"
             >
               <Shuffle className="w-3.5 h-3.5" />

@@ -8,6 +8,7 @@ import {
   Sliders,
   Sparkles,
   Info,
+  Star,
 } from 'lucide-react';
 import { AssessmentCriterion } from '../types';
 import { ConfirmModal } from './ConfirmModal';
@@ -32,6 +33,7 @@ interface CriteriaManagementModalProps {
   ) => void;
   onDeleteCriterion: (id: string) => void;
   onResetToDefaults: () => void;
+  onSetDefaultCriterion?: (id: string) => void;
 }
 
 const colorPalette = [
@@ -52,6 +54,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
   onEditCriterion,
   onDeleteCriterion,
   onResetToDefaults,
+  onSetDefaultCriterion,
 }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -266,6 +269,28 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
+                      {onSetDefaultCriterion && (
+                        crit.isDefault ? (
+                          <span
+                            className="px-2 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200 flex items-center gap-1 shadow-2xs"
+                            title="Bu ölçüt varsayılan olarak ayarlıdır"
+                          >
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                            <span className="hidden sm:inline">Varsayılan</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onSetDefaultCriterion(crit.id)}
+                            className="px-2 py-1 rounded-lg text-xs font-semibold bg-slate-50 hover:bg-amber-50 text-slate-500 hover:text-amber-800 border border-slate-200 hover:border-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
+                            title="Bu ölçütü varsayılan olarak ayarla"
+                          >
+                            <Star className="w-3 h-3 text-slate-400" />
+                            <span className="hidden sm:inline">Varsayılan Yap</span>
+                          </button>
+                        )
+                      )}
+
                       <button
                         type="button"
                         onClick={() => {

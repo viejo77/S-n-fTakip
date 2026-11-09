@@ -110,6 +110,7 @@ export default function App() {
 
   // Modals
   const [isRandomPickerOpen, setIsRandomPickerOpen] = useState(false);
+  const [randomPickerCriterionId, setRandomPickerCriterionId] = useState<string | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportTargetClass, setReportTargetClass] = useState<ClassGroup | null>(null);
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
@@ -235,8 +236,8 @@ export default function App() {
             message: `✓ Bulut veritabanı bağlandı! (${cloudData.classes.length} sınıf eşitlendi)`,
             type: 'success',
           });
-        } else {
-          // First time this Google user logs in: save existing local classes to cloud!
+        } else if (cloudData !== null) {
+          // Explicitly received empty cloud document from server, save current classes
           await saveWorkspaceToCloud(user.uid, {
             schoolInfo,
             classes,
@@ -249,7 +250,7 @@ export default function App() {
           });
         }
       } catch (e) {
-        console.error('Failed to sync on auth change:', e);
+        console.warn('Auth sync notice:', e);
       } finally {
         setIsCloudSyncing(false);
         // Only allow automatic writes AFTER initial cloud sync check completes!
@@ -687,7 +688,7 @@ export default function App() {
     }
   };
 
-  const handleMarkStudentCalled = (studentId: string) => {
+  const handleMarkStudentCalled = (studentId: string, criterionId?: string) => {
     if (!activeClass) return;
     setClasses((prev) =>
       prev.map((c) => {
@@ -695,22 +696,61 @@ export default function App() {
 
         const updatedStudents = c.students.map((s) => {
           if (s.id !== studentId) return s;
+
+          const updatedCriterionCalled = criterionId
+            ? { ...(s.criterionCalled || {}), [criterionId]: true }
+            : s.criterionCalled;
+
+          const updatedCriterionCalledCount = criterionId
+            ? {
+                ...(s.criterionCalledCount || {}),
+                [criterionId]: (s.criterionCalledCount?.[criterionId] || 0) + 1,
+              }
+            : s.criterionCalledCount;
+
           return {
             ...s,
             calledInCurrentRound: true,
             calledCount: (s.calledCount || 0) + 1,
+            criterionCalled: updatedCriterionCalled,
+            criterionCalledCount: updatedCriterionCalledCount,
           };
         });
 
-        // Check if all present/late students have now been called in this round!
         const eligible = updatedStudents.filter(
           (s) => s.attendance === 'present' || s.attendance === 'late'
         );
-        const allCalled =
+
+        // Check if all eligible students are called for this specific criterion
+        if (criterionId) {
+          const allCalledInCriterion =
+            eligible.length > 0 &&
+            eligible.every((s) => s.criterionCalled?.[criterionId]);
+
+          if (allCalledInCriterion) {
+            const currentCritRound = c.criterionRounds?.[criterionId] || 1;
+            return {
+              ...c,
+              criterionRounds: {
+                ...(c.criterionRounds || {}),
+                [criterionId]: currentCritRound + 1,
+              },
+              students: updatedStudents.map((s) => ({
+                ...s,
+                criterionCalled: {
+                  ...(s.criterionCalled || {}),
+                  [criterionId]: false,
+                },
+              })),
+            };
+          }
+        }
+
+        // Also check if all eligible students are called for the general round
+        const allCalledGeneral =
           eligible.length > 0 && eligible.every((s) => s.calledInCurrentRound);
 
-        if (allCalled) {
-          // Automatic reset for next round, increment round number
+        if (allCalledGeneral) {
           return {
             ...c,
             roundNumber: (c.roundNumber || 1) + 1,
@@ -729,13 +769,32 @@ export default function App() {
     );
   };
 
-  const handleResetClassRound = (classId?: string) => {
+  const handleResetClassRound = (classId?: string, criterionId?: string) => {
     const targetId = classId || (activeClass ? activeClass.id : null);
     if (!targetId) return;
 
     setClasses((prev) =>
       prev.map((c) => {
         if (c.id !== targetId) return c;
+
+        if (criterionId) {
+          const currentCritRound = c.criterionRounds?.[criterionId] || 1;
+          return {
+            ...c,
+            criterionRounds: {
+              ...(c.criterionRounds || {}),
+              [criterionId]: currentCritRound + 1,
+            },
+            students: c.students.map((s) => ({
+              ...s,
+              criterionCalled: {
+                ...(s.criterionCalled || {}),
+                [criterionId]: false,
+              },
+            })),
+          };
+        }
+
         return {
           ...c,
           roundNumber: (c.roundNumber || 1) + 1,
@@ -765,10 +824,14 @@ export default function App() {
             const updatedHistory = historyItem
               ? [historyItem, ...(st.criteriaHistory || [])]
               : st.criteriaHistory || [];
+            const updatedCriterionCalled = historyItem?.criterionId
+              ? { ...(st.criterionCalled || {}), [historyItem.criterionId]: true }
+              : st.criterionCalled;
             return {
               ...st,
               criteriaScores: newScores,
               criteriaHistory: updatedHistory,
+              criterionCalled: updatedCriterionCalled,
             };
           }),
         };
@@ -814,6 +877,10 @@ export default function App() {
               ...st,
               criteriaScores: newScores,
               criteriaHistory: [historyItem, ...(st.criteriaHistory || [])],
+              criterionCalled: {
+                ...(st.criterionCalled || {}),
+                [criterionId]: true,
+              },
             };
           }),
         };
@@ -867,6 +934,10 @@ export default function App() {
               ...st,
               criteriaScores: newScores,
               criteriaHistory: [historyItem, ...(st.criteriaHistory || [])],
+              criterionCalled: {
+                ...(st.criterionCalled || {}),
+                [criterionId]: true,
+              },
             };
           }),
         };
@@ -913,6 +984,20 @@ export default function App() {
 
   const handleResetCriteriaToDefaults = () => {
     setCriteria(initialCriteria);
+  };
+
+  const handleSetDefaultCriterion = (criterionId: string) => {
+    setCriteria((prev) =>
+      prev.map((c) => ({
+        ...c,
+        isDefault: c.id === criterionId,
+      }))
+    );
+    const chosen = criteria.find((c) => c.id === criterionId);
+    setGlobalToast({
+      message: `✓ "${chosen?.name || 'Ölçüt'}" varsayılan ölçüt olarak ayarlandı.`,
+      type: 'success',
+    });
   };
 
   const handleResetData = () => {
@@ -1007,7 +1092,10 @@ export default function App() {
               setEditingClass(null);
               setIsClassModalOpen(true);
             }}
-            onOpenRandomPicker={() => setIsRandomPickerOpen(true)}
+            onOpenRandomPicker={(criterionId) => {
+              setRandomPickerCriterionId(criterionId || null);
+              setIsRandomPickerOpen(true);
+            }}
             onOpenReport={() => {
               setReportTargetClass(activeClass);
               setIsReportOpen(true);
@@ -1041,6 +1129,10 @@ export default function App() {
             onOpenStudentCriteria={(student) => setSelectedStudentForCriteria(student)}
             onQuickAdjustStudentScore={handleQuickAdjustStudentScore}
             onSetStudentCriterionScore={handleSetStudentCriterionScore}
+            onOpenRandomPicker={(criterionId) => {
+              setRandomPickerCriterionId(criterionId || null);
+              setIsRandomPickerOpen(true);
+            }}
           />
         )}
 
@@ -1104,10 +1196,22 @@ export default function App() {
       {/* Random Student Modal */}
       <RandomStudentModal
         isOpen={isRandomPickerOpen && !!activeClass}
-        onClose={() => setIsRandomPickerOpen(false)}
+        onClose={() => {
+          setIsRandomPickerOpen(false);
+          setRandomPickerCriterionId(null);
+        }}
         students={activeClass ? activeClass.students : []}
         currentRound={activeClass ? activeClass.roundNumber || 1 : 1}
+        criterionRounds={activeClass ? activeClass.criterionRounds : {}}
+        initialCriterionId={randomPickerCriterionId}
+        criteria={criteria}
         onAwardStudent={handleAwardStudentFromPicker}
+        onUpdateScores={handleUpdateStudentScores}
+        onOpenCriteriaModal={(student) => {
+          setSelectedStudentForCriteria(student);
+          setIsRandomPickerOpen(false);
+        }}
+        onSetDefaultCriterion={handleSetDefaultCriterion}
         onMarkStudentCalled={handleMarkStudentCalled}
         onResetRound={handleResetClassRound}
       />
@@ -1176,6 +1280,7 @@ export default function App() {
         onEditCriterion={handleEditCriterion}
         onDeleteCriterion={handleDeleteCriterion}
         onResetToDefaults={handleResetCriteriaToDefaults}
+        onSetDefaultCriterion={handleSetDefaultCriterion}
       />
 
       {/* Mobile Install & QR Code Modal */}

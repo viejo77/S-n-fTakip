@@ -83,11 +83,20 @@ export function handleFirestoreError(
 // Test Connection on boot
 export async function testConnection(): Promise<boolean> {
   try {
-    await getDocFromServer(doc(db, 'workspaces', 'connection-test'));
+    const testPromise = getDocFromServer(doc(db, 'workspaces', 'connection-test'));
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('connection timeout')), 4000)
+    );
+    await Promise.race([testPromise, timeoutPromise]);
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client is offline, using local cache.');
+    if (
+      error instanceof Error &&
+      (error.message.includes('the client is offline') ||
+        error.message.includes('timeout') ||
+        error.message.includes('offline'))
+    ) {
+      console.warn('Firebase client is offline or timed out, using local cache.');
     }
     return false;
   }
@@ -134,7 +143,18 @@ export async function saveWorkspaceToCloud(
       updatedAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'workspaces', userId), payload);
-  } catch (error) {
+  } catch (error: any) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const code = error?.code;
+    if (
+      msg.includes('the client is offline') ||
+      msg.includes('offline') ||
+      code === 'unavailable' ||
+      code === 'deadline-exceeded'
+    ) {
+      console.warn('Firestore write queued in offline storage.');
+      return;
+    }
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
@@ -148,7 +168,18 @@ export async function fetchWorkspaceFromCloud(userId: string): Promise<Workspace
       return snap.data() as WorkspaceData;
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const code = error?.code;
+    if (
+      msg.includes('the client is offline') ||
+      msg.includes('offline') ||
+      code === 'unavailable' ||
+      code === 'deadline-exceeded'
+    ) {
+      console.warn('Firestore offline: cannot fetch from cloud currently, continuing with local state.');
+      return null;
+    }
     handleFirestoreError(error, OperationType.GET, path);
   }
 }
@@ -167,7 +198,18 @@ export function subscribeToWorkspace(
         onData(snap.data() as WorkspaceData);
       }
     },
-    (error) => {
+    (error: any) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      const code = error?.code;
+      if (
+        msg.includes('the client is offline') ||
+        msg.includes('offline') ||
+        code === 'unavailable' ||
+        code === 'deadline-exceeded'
+      ) {
+        console.warn('Firestore subscription: client is offline, waiting for reconnection.');
+        return;
+      }
       try {
         handleFirestoreError(error, OperationType.GET, path);
       } catch (e) {

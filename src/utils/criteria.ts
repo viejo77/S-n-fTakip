@@ -27,6 +27,7 @@ export const initialCriteria: AssessmentCriterion[] = [
     color: '#ea580c', // Orange
     type: 'plus_minus',
     stepPoints: 1,
+    isDefault: true,
   },
   {
     id: 'crit-performance',

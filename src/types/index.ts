@@ -30,6 +30,7 @@ export interface AssessmentCriterion {
   type?: CriterionType; // 'score': Doğrudan Puan Bazlı (0-100), 'plus_minus': +/- Adımlı (100'den düşmeli/eklemeli)
   stepPoints?: number; // e.g. 5, 10, 15, 20
   maxScore?: number;
+  isDefault?: boolean;
 }
 
 export interface Student {
@@ -46,6 +47,8 @@ export interface Student {
   notes?: string;
   calledCount?: number;
   calledInCurrentRound?: boolean;
+  criterionCalled?: Record<string, boolean>; // criterionId -> true if called in current round for this criterion
+  criterionCalledCount?: Record<string, number>; // criterionId -> total count called for this criterion
   criteriaScores?: Record<string, number>; // criterionId -> score (0-100, default 100)
   criteriaHistory?: CriterionScoreHistory[];
 }
@@ -59,6 +62,7 @@ export interface ClassGroup {
   room?: string; // e.g. "Derslik 204"
   color: string;
   roundNumber?: number;
+  criterionRounds?: Record<string, number>; // criterionId -> round number (1, 2, 3...)
   students: Student[];
 }
 
