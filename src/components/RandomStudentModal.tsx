@@ -23,6 +23,7 @@ import { speakTurkish, stopSpeech } from '../utils/speech';
 import {
   getStudentCriterionScore,
   calculateStudentAverageGrade,
+  getStudentCriterionCounts,
 } from '../utils/criteria';
 
 interface RandomStudentModalProps {
@@ -38,6 +39,20 @@ interface RandomStudentModalProps {
     studentId: string,
     newScores: Record<string, number>,
     newHistoryItem?: CriterionScoreHistory
+  ) => void;
+  onAdjustStudentCounts?: (
+    studentId: string,
+    criterionId: string,
+    deltaPlus: number,
+    deltaMinus: number,
+    reason?: string
+  ) => void;
+  onSetStudentCounts?: (
+    studentId: string,
+    criterionId: string,
+    exactPlus: number,
+    exactMinus: number,
+    reason?: string
   ) => void;
   onOpenCriteriaModal?: (student: Student) => void;
   onSetDefaultCriterion?: (criterionId: string) => void;
@@ -55,6 +70,8 @@ export const RandomStudentModal: React.FC<RandomStudentModalProps> = ({
   criteria = [],
   onAwardStudent,
   onUpdateScores,
+  onAdjustStudentCounts,
+  onSetStudentCounts,
   onOpenCriteriaModal,
   onSetDefaultCriterion,
   onMarkStudentCalled,
@@ -559,7 +576,7 @@ export const RandomStudentModal: React.FC<RandomStudentModalProps> = ({
 
                     <div className="text-right shrink-0">
                       <span className="text-[10px] uppercase font-bold text-slate-400 block leading-none">
-                        Mevcut Not
+                        {activeCriterion.type === 'plus_minus_average' ? 'Ortalama Not' : 'Mevcut Not'}
                       </span>
                       <span
                         className={`font-mono text-lg font-black leading-tight ${
@@ -570,93 +587,281 @@ export const RandomStudentModal: React.FC<RandomStudentModalProps> = ({
                             : 'text-rose-700'
                         }`}
                       >
-                        {currentCriterionScore}
+                        {activeCriterion.type === 'plus_minus_average' ? `%${currentCriterionScore}` : currentCriterionScore}
                         <span className="text-xs font-normal text-slate-400">/100</span>
                       </span>
                     </div>
                   </div>
 
-                  {/* Quick Delta Buttons */}
-                  <div className="pt-0.5">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
-                      Hızlı Puan Ver / Kes:
-                    </span>
-                    <div className="grid grid-cols-6 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustCriterionScore(-10, '10 Puan Kesildi')}
-                        className="py-1.5 px-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
-                        title="-10 Puan Kes"
-                      >
-                        -10
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustCriterionScore(-5, '5 Puan Kesildi')}
-                        className="py-1.5 px-1 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
-                        title="-5 Puan Kes"
-                      >
-                        -5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustCriterionScore(1, '+1 Puan Eklendi')}
-                        className="py-1.5 px-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
-                        title="+1 Puan Ekle"
-                      >
-                        +1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustCriterionScore(5, '+5 Puan Eklendi')}
-                        className="py-1.5 px-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
-                        title="+5 Puan Ekle"
-                      >
-                        +5
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAdjustCriterionScore(10, '+10 Puan Eklendi')}
-                        className="py-1.5 px-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center shadow-xs"
-                        title="+10 Puan Ekle"
-                      >
-                        +10
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSetExactCriterionScore(100, 'Tam Puan (100) Verildi')}
-                        className="py-1.5 px-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
-                        title="100 Tam Puan Ver"
-                      >
-                        💯 100
-                      </button>
-                    </div>
-                  </div>
+                  {/* Dynamic Controls based on Criterion Type */}
+                  {activeCriterion.type === 'plus_minus_average' ? (
+                    (() => {
+                      const counts = liveStudent
+                        ? getStudentCriterionCounts(liveStudent, activeCriterion.id)
+                        : { plus: 0, minus: 0 };
+                      const totalCounts = counts.plus + counts.minus;
+                      const currentRatio =
+                        totalCounts > 0 ? Math.round((counts.plus / totalCounts) * 100) : 100;
 
-                  {/* Preset Reasons Chips */}
-                  <div className="pt-1 border-t border-slate-100 flex flex-wrap gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleAdjustCriterionScore(10, 'Soruyu Doğru Yanıtladı (+10)')}
-                      className="px-2 py-1 rounded-md bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 text-[10px] font-semibold transition-colors cursor-pointer"
-                    >
-                      ✓ Doğru Yanıt (+10)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAdjustCriterionScore(5, 'Derse Aktif Katıldı (+5)')}
-                      className="px-2 py-1 rounded-md bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 text-[10px] font-semibold transition-colors cursor-pointer"
-                    >
-                      ✓ Aktif Katılım (+5)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAdjustCriterionScore(-10, 'Eksik veya Hazırlıksız (-10)')}
-                      className="px-2 py-1 rounded-md bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-800 text-[10px] font-semibold transition-colors cursor-pointer"
-                    >
-                      ✕ Eksik / Hazırlıksız (-10)
-                    </button>
-                  </div>
+                      return (
+                        <div className="space-y-2 pt-0.5">
+                          {/* Big Plus / Minus Buttons */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (liveStudent && onAdjustStudentCounts) {
+                                  onAdjustStudentCounts(
+                                    liveStudent.id,
+                                    activeCriterion.id,
+                                    1,
+                                    0,
+                                    'Ödev/Kontrol Başarılı (+1 Artı)'
+                                  );
+                                  setFeedbackToast(
+                                    `✓ +1 Artı eklendi! (Not: %${Math.round(
+                                      ((counts.plus + 1) / (totalCounts + 1)) * 100
+                                    )})`
+                                  );
+                                  setTimeout(() => setFeedbackToast(null), 2500);
+                                }
+                              }}
+                              className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>+1 Artı Ver</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (liveStudent && onAdjustStudentCounts) {
+                                  onAdjustStudentCounts(
+                                    liveStudent.id,
+                                    activeCriterion.id,
+                                    0,
+                                    1,
+                                    'Ödev/Kontrol Eksik (+1 Eksi)'
+                                  );
+                                  setFeedbackToast(
+                                    `✕ +1 Eksi eklendi! (Not: %${Math.round(
+                                      (counts.plus / (totalCounts + 1)) * 100
+                                    )})`
+                                  );
+                                  setTimeout(() => setFeedbackToast(null), 2500);
+                                }
+                              }}
+                              className="py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer"
+                            >
+                              <Minus className="w-4 h-4" />
+                              <span>+1 Eksi Ver</span>
+                            </button>
+                          </div>
+
+                          {/* Current Counts Bar & Steppers */}
+                          <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/90 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 bg-white border border-emerald-300 rounded-lg px-2 py-0.5 shadow-2xs">
+                                <span className="text-[10px] font-extrabold text-emerald-800">Artı:</span>
+                                <span className="font-mono font-black text-xs text-emerald-950">
+                                  {counts.plus}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onAdjustStudentCounts?.(
+                                      liveStudent!.id,
+                                      activeCriterion.id,
+                                      -1,
+                                      0,
+                                      'Artı 1 azaltıldı'
+                                    )
+                                  }
+                                  disabled={counts.plus <= 0}
+                                  className="w-4 h-4 rounded text-slate-400 hover:text-emerald-700 disabled:opacity-30 cursor-pointer text-[10px] font-bold"
+                                  title="1 Artı Azalt"
+                                >
+                                  -
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1 bg-white border border-rose-300 rounded-lg px-2 py-0.5 shadow-2xs">
+                                <span className="text-[10px] font-extrabold text-rose-800">Eksi:</span>
+                                <span className="font-mono font-black text-xs text-rose-950">
+                                  {counts.minus}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onAdjustStudentCounts?.(
+                                      liveStudent!.id,
+                                      activeCriterion.id,
+                                      0,
+                                      -1,
+                                      'Eksi 1 azaltıldı'
+                                    )
+                                  }
+                                  disabled={counts.minus <= 0}
+                                  className="w-4 h-4 rounded text-slate-400 hover:text-rose-700 disabled:opacity-30 cursor-pointer text-[10px] font-bold"
+                                  title="1 Eksi Azalt"
+                                >
+                                  -
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="text-[10px] font-semibold text-slate-500 block leading-tight">
+                                Ortalama ({counts.plus}/{totalCounts > 0 ? totalCounts : 0}):
+                              </span>
+                              <span className="font-mono font-black text-sm text-teal-800">
+                                %{currentRatio}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Preset Reasons Chips */}
+                          <div className="pt-1 border-t border-slate-100 flex flex-wrap gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onAdjustStudentCounts?.(
+                                  liveStudent!.id,
+                                  activeCriterion.id,
+                                  1,
+                                  0,
+                                  'Ödev Tam ve Eksiksiz (+1 Artı)'
+                                );
+                                setFeedbackToast('✓ +1 Artı Eklendi!');
+                                setTimeout(() => setFeedbackToast(null), 2500);
+                              }}
+                              className="px-2 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-semibold transition-colors cursor-pointer"
+                            >
+                              ✓ Eksiksiz (+1 Artı)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onAdjustStudentCounts?.(
+                                  liveStudent!.id,
+                                  activeCriterion.id,
+                                  0,
+                                  1,
+                                  'Ödev Eksik / Yapılmamış (+1 Eksi)'
+                                );
+                                setFeedbackToast('✕ +1 Eksi Eklendi!');
+                                setTimeout(() => setFeedbackToast(null), 2500);
+                              }}
+                              className="px-2 py-1 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-800 text-[10px] font-semibold transition-colors cursor-pointer"
+                            >
+                              ✕ Eksik (+1 Eksi)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSetStudentCounts?.(
+                                  liveStudent!.id,
+                                  activeCriterion.id,
+                                  0,
+                                  0,
+                                  'Artı ve Eksi Sıfırlandı'
+                                );
+                                setFeedbackToast('Tüm Artı/Eksiler Sıfırlandı');
+                                setTimeout(() => setFeedbackToast(null), 2500);
+                              }}
+                              className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-semibold transition-colors cursor-pointer ml-auto"
+                            >
+                              Sıfırla
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <>
+                      {/* Quick Delta Buttons */}
+                      <div className="pt-0.5">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                          Hızlı Puan Ver / Kes:
+                        </span>
+                        <div className="grid grid-cols-6 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustCriterionScore(-10, '10 Puan Kesildi')}
+                            className="py-1.5 px-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
+                            title="-10 Puan Kes"
+                          >
+                            -10
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustCriterionScore(-5, '5 Puan Kesildi')}
+                            className="py-1.5 px-1 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
+                            title="-5 Puan Kes"
+                          >
+                            -5
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustCriterionScore(1, '+1 Puan Eklendi')}
+                            className="py-1.5 px-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
+                            title="+1 Puan Ekle"
+                          >
+                            +1
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustCriterionScore(5, '+5 Puan Eklendi')}
+                            className="py-1.5 px-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
+                            title="+5 Puan Ekle"
+                          >
+                            +5
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustCriterionScore(10, '+10 Puan Eklendi')}
+                            className="py-1.5 px-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center shadow-xs"
+                            title="+10 Puan Ekle"
+                          >
+                            +10
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSetExactCriterionScore(100, 'Tam Puan (100) Verildi')}
+                            className="py-1.5 px-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer text-center"
+                            title="100 Tam Puan Ver"
+                          >
+                            💯 100
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Preset Reasons Chips */}
+                      <div className="pt-1 border-t border-slate-100 flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustCriterionScore(10, 'Soruyu Doğru Yanıtladı (+10)')}
+                          className="px-2 py-1 rounded-md bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 text-[10px] font-semibold transition-colors cursor-pointer"
+                        >
+                          ✓ Doğru Yanıt (+10)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustCriterionScore(5, 'Derse Aktif Katıldı (+5)')}
+                          className="px-2 py-1 rounded-md bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 text-[10px] font-semibold transition-colors cursor-pointer"
+                        >
+                          ✓ Aktif Katılım (+5)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustCriterionScore(-10, 'Eksik veya Hazırlıksız (-10)')}
+                          className="px-2 py-1 rounded-md bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-800 text-[10px] font-semibold transition-colors cursor-pointer"
+                        >
+                          ✕ Eksik / Hazırlıksız (-10)
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

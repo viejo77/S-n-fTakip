@@ -11,8 +11,14 @@ import {
   ScheduleSlot,
   AssessmentCriterion,
   CriterionScoreHistory,
+  CriterionType,
 } from './types';
-import { initialCriteria, getStudentCriterionScore } from './utils/criteria';
+import {
+  initialCriteria,
+  getStudentCriterionScore,
+  calculatePlusMinusAverageScore,
+  getStudentCriterionCounts,
+} from './utils/criteria';
 import {
   auth,
   signInWithGoogle,
@@ -945,12 +951,152 @@ export default function App() {
     );
   };
 
+  const handleAdjustStudentCounts = (
+    studentId: string,
+    criterionId: string,
+    deltaPlus: number,
+    deltaMinus: number,
+    reason?: string
+  ) => {
+    if (!activeClass) return;
+    const criterion = criteria.find((c) => c.id === criterionId);
+    const critName = criterion ? criterion.name : 'Ölçüt';
+
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id !== activeClass.id) return c;
+        return {
+          ...c,
+          students: c.students.map((st) => {
+            if (st.id !== studentId) return st;
+            const currentCounts = st.criteriaCounts?.[criterionId] || { plus: 0, minus: 0 };
+            const newPlus = Math.max(0, (currentCounts.plus || 0) + deltaPlus);
+            const newMinus = Math.max(0, (currentCounts.minus || 0) + deltaMinus);
+            const newScore = calculatePlusMinusAverageScore(
+              newPlus,
+              newMinus,
+              criterion?.defaultScore ?? 100
+            );
+
+            const newScores = {
+              ...(st.criteriaScores || {}),
+              [criterionId]: newScore,
+            };
+
+            const newCounts = {
+              ...(st.criteriaCounts || {}),
+              [criterionId]: { plus: newPlus, minus: newMinus },
+            };
+
+            const defaultReason =
+              deltaPlus > 0
+                ? `+1 Artı Eklendi (${newPlus}+ / ${newMinus}- -> %${newScore})`
+                : deltaMinus > 0
+                ? `+1 Eksi Eklendi (${newPlus}+ / ${newMinus}- -> %${newScore})`
+                : `Artı/Eksi Güncellendi (${newPlus}+ / ${newMinus}- -> %${newScore})`;
+
+            const historyItem: CriterionScoreHistory = {
+              id: 'h-' + Date.now(),
+              criterionId,
+              criterionName: critName,
+              change: deltaPlus - deltaMinus,
+              newScore,
+              reason: reason || defaultReason,
+              timestamp: new Date().toLocaleTimeString('tr-TR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            };
+
+            return {
+              ...st,
+              criteriaScores: newScores,
+              criteriaCounts: newCounts,
+              criteriaHistory: [historyItem, ...(st.criteriaHistory || [])],
+              criterionCalled: {
+                ...(st.criterionCalled || {}),
+                [criterionId]: true,
+              },
+            };
+          }),
+        };
+      })
+    );
+  };
+
+  const handleSetStudentCounts = (
+    studentId: string,
+    criterionId: string,
+    exactPlus: number,
+    exactMinus: number,
+    reason?: string
+  ) => {
+    if (!activeClass) return;
+    const criterion = criteria.find((c) => c.id === criterionId);
+    const critName = criterion ? criterion.name : 'Ölçüt';
+    const newPlus = Math.max(0, exactPlus);
+    const newMinus = Math.max(0, exactMinus);
+    const newScore = calculatePlusMinusAverageScore(
+      newPlus,
+      newMinus,
+      criterion?.defaultScore ?? 100
+    );
+
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id !== activeClass.id) return c;
+        return {
+          ...c,
+          students: c.students.map((st) => {
+            if (st.id !== studentId) return st;
+            const newScores = {
+              ...(st.criteriaScores || {}),
+              [criterionId]: newScore,
+            };
+
+            const newCounts = {
+              ...(st.criteriaCounts || {}),
+              [criterionId]: { plus: newPlus, minus: newMinus },
+            };
+
+            const historyItem: CriterionScoreHistory = {
+              id: 'h-' + Date.now(),
+              criterionId,
+              criterionName: critName,
+              change: 0,
+              newScore,
+              reason:
+                reason ||
+                `Artı/Eksi Belirlendi: ${newPlus} Artı, ${newMinus} Eksi -> %${newScore}`,
+              timestamp: new Date().toLocaleTimeString('tr-TR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            };
+
+            return {
+              ...st,
+              criteriaScores: newScores,
+              criteriaCounts: newCounts,
+              criteriaHistory: [historyItem, ...(st.criteriaHistory || [])],
+              criterionCalled: {
+                ...(st.criterionCalled || {}),
+                [criterionId]: true,
+              },
+            };
+          }),
+        };
+      })
+    );
+  };
+
   const handleAddCriterion = (
     name: string,
     description: string,
     color: string,
-    type: 'score' | 'plus_minus',
-    stepPoints: number
+    type: CriterionType,
+    stepPoints: number,
+    targetCount?: number
   ) => {
     const newCrit: AssessmentCriterion = {
       id: 'crit-' + Date.now(),
@@ -960,6 +1106,7 @@ export default function App() {
       color,
       type,
       stepPoints,
+      targetCount,
     };
     setCriteria((prev) => [...prev, newCrit]);
   };
@@ -968,12 +1115,13 @@ export default function App() {
     id: string,
     name: string,
     description: string,
-    type: 'score' | 'plus_minus',
-    stepPoints: number
+    type: CriterionType,
+    stepPoints: number,
+    targetCount?: number
   ) => {
     setCriteria((prev) =>
       prev.map((c) =>
-        c.id === id ? { ...c, name, description, type, stepPoints } : c
+        c.id === id ? { ...c, name, description, type, stepPoints, targetCount } : c
       )
     );
   };
@@ -1129,6 +1277,8 @@ export default function App() {
             onOpenStudentCriteria={(student) => setSelectedStudentForCriteria(student)}
             onQuickAdjustStudentScore={handleQuickAdjustStudentScore}
             onSetStudentCriterionScore={handleSetStudentCriterionScore}
+            onAdjustStudentCounts={handleAdjustStudentCounts}
+            onSetStudentCounts={handleSetStudentCounts}
             onOpenRandomPicker={(criterionId) => {
               setRandomPickerCriterionId(criterionId || null);
               setIsRandomPickerOpen(true);
@@ -1207,6 +1357,8 @@ export default function App() {
         criteria={criteria}
         onAwardStudent={handleAwardStudentFromPicker}
         onUpdateScores={handleUpdateStudentScores}
+        onAdjustStudentCounts={handleAdjustStudentCounts}
+        onSetStudentCounts={handleSetStudentCounts}
         onOpenCriteriaModal={(student) => {
           setSelectedStudentForCriteria(student);
           setIsRandomPickerOpen(false);
@@ -1269,6 +1421,8 @@ export default function App() {
         }
         criteria={criteria}
         onUpdateScores={handleUpdateStudentScores}
+        onAdjustStudentCounts={handleAdjustStudentCounts}
+        onSetStudentCounts={handleSetStudentCounts}
       />
 
       {/* Criteria Definition & Management Modal */}

@@ -41,19 +41,58 @@ export const initialCriteria: AssessmentCriterion[] = [
 ];
 
 /**
+ * Returns student's plus and minus counts for a specific criterion
+ */
+export const getStudentCriterionCounts = (
+  student: Student,
+  criterionId: string
+): { plus: number; minus: number } => {
+  if (student.criteriaCounts && student.criteriaCounts[criterionId]) {
+    return {
+      plus: Math.max(0, student.criteriaCounts[criterionId].plus || 0),
+      minus: Math.max(0, student.criteriaCounts[criterionId].minus || 0),
+    };
+  }
+  return { plus: 0, minus: 0 };
+};
+
+/**
+ * Calculates percentage / arithmetic mean score from plus and minus counts.
+ * E.g. 4 plus, 1 minus -> 4/5 * 100 = 80
+ * If 0 plus and 0 minus, returns defaultScore (defaults to 100)
+ */
+export const calculatePlusMinusAverageScore = (
+  plus: number,
+  minus: number,
+  defaultScore: number = 100
+): number => {
+  const total = plus + minus;
+  if (total === 0) return defaultScore;
+  return Math.round((plus / total) * 100);
+};
+
+/**
  * Returns a student's score for a specific criterion, defaulting to 100 if not yet modified.
  */
 export const getStudentCriterionScore = (
   student: Student,
-  criterionId: string
+  criterionId: string,
+  criterion?: AssessmentCriterion
 ): number => {
+  if (criterion?.type === 'plus_minus_average' && student.criteriaCounts?.[criterionId]) {
+    const { plus, minus } = getStudentCriterionCounts(student, criterionId);
+    if (plus + minus > 0) {
+      return calculatePlusMinusAverageScore(plus, minus, criterion.defaultScore ?? 100);
+    }
+  }
+
   if (
     student.criteriaScores &&
     typeof student.criteriaScores[criterionId] === 'number'
   ) {
     return student.criteriaScores[criterionId];
   }
-  return 100;
+  return criterion?.defaultScore ?? 100;
 };
 
 /**

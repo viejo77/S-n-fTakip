@@ -10,7 +10,7 @@ import {
   Info,
   Star,
 } from 'lucide-react';
-import { AssessmentCriterion } from '../types';
+import { AssessmentCriterion, CriterionType } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 
 interface CriteriaManagementModalProps {
@@ -21,15 +21,17 @@ interface CriteriaManagementModalProps {
     name: string,
     description: string,
     color: string,
-    type: 'score' | 'plus_minus',
-    stepPoints: number
+    type: CriterionType,
+    stepPoints: number,
+    targetCount?: number
   ) => void;
   onEditCriterion: (
     id: string,
     name: string,
     description: string,
-    type: 'score' | 'plus_minus',
-    stepPoints: number
+    type: CriterionType,
+    stepPoints: number,
+    targetCount?: number
   ) => void;
   onDeleteCriterion: (id: string) => void;
   onResetToDefaults: () => void;
@@ -60,14 +62,16 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newColor, setNewColor] = useState(colorPalette[0]);
-  const [newType, setNewType] = useState<'score' | 'plus_minus'>('score');
+  const [newType, setNewType] = useState<CriterionType>('score');
   const [newStepPoints, setNewStepPoints] = useState<number>(10);
+  const [newTargetCount, setNewTargetCount] = useState<number | undefined>(undefined);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [editType, setEditType] = useState<'score' | 'plus_minus'>('score');
+  const [editType, setEditType] = useState<CriterionType>('score');
   const [editStepPoints, setEditStepPoints] = useState<number>(10);
+  const [editTargetCount, setEditTargetCount] = useState<number | undefined>(undefined);
 
   const [criterionToDelete, setCriterionToDelete] = useState<AssessmentCriterion | null>(
     null
@@ -83,16 +87,25 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
       newDesc.trim(),
       newColor,
       newType,
-      newStepPoints
+      newStepPoints,
+      newTargetCount
     );
     setNewName('');
     setNewDesc('');
+    setNewTargetCount(undefined);
     setIsAdding(false);
   };
 
   const handleSaveEdit = (id: string) => {
     if (!editName.trim()) return;
-    onEditCriterion(id, editName.trim(), editDesc.trim(), editType, editStepPoints);
+    onEditCriterion(
+      id,
+      editName.trim(),
+      editDesc.trim(),
+      editType,
+      editStepPoints,
+      editTargetCount
+    );
     setEditingId(null);
   };
 
@@ -166,7 +179,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">
                         Değerlendirme Tipi:
                       </label>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                         <button
                           type="button"
                           onClick={() => setEditType('score')}
@@ -177,7 +190,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                           }`}
                         >
                           <div className="font-bold">🔢 Puan Bazlı</div>
-                          <div className="text-[10px] text-slate-500">Doğrudan not girişi (0-100)</div>
+                          <div className="text-[10px] text-slate-500">Doğrudan not (0-100)</div>
                         </button>
 
                         <button
@@ -190,10 +203,36 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                           }`}
                         >
                           <div className="font-bold">➕➖ +/- Adımlı</div>
-                          <div className="text-[10px] text-slate-500">Her ekside puan düşüşü</div>
+                          <div className="text-[10px] text-slate-500">100'den puan düşüşü</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditType('plus_minus_average')}
+                          className={`p-2 rounded-lg border text-left text-xs transition-all cursor-pointer ${
+                            editType === 'plus_minus_average'
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-950 font-bold shadow-2xs ring-1 ring-emerald-500/30'
+                              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="font-bold">📊 +/- Ortalama</div>
+                          <div className="text-[10px] text-slate-500">+ ve - oranı puana döner</div>
                         </button>
                       </div>
                     </div>
+
+                    {editType === 'plus_minus_average' && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950">
+                        <span className="font-bold block mb-0.5">📊 Artı / Eksi Ortalama Formülü:</span>
+                        <p className="text-[11px] text-emerald-800 leading-snug">
+                          Verilen <strong>+</strong> ve <strong>-</strong> adetlerinin aritmetik ortalaması (başarı oranı) hesaplanır:
+                          <br />
+                          <code className="font-mono text-emerald-900 font-bold">Not = (Artı / Toplam Kontrol) × 100</code>
+                          <br />
+                          <em>Örn: 4 Artı ve 1 Eksi = %80 (80 Puan)</em>
+                        </p>
+                      </div>
+                    )}
 
                     {editType === 'plus_minus' && (
                       <div>
@@ -230,7 +269,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                       <button
                         type="button"
                         onClick={() => handleSaveEdit(crit.id)}
-                        className="px-3 py-1 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-md"
+                        className="px-3 py-1 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-md cursor-pointer"
                       >
                         Kaydet
                       </button>
@@ -250,12 +289,16 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                           </span>
                           <span
                             className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md border ${
-                              crit.type === 'plus_minus'
+                              crit.type === 'plus_minus_average'
+                                ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                                : crit.type === 'plus_minus'
                                 ? 'bg-amber-50 text-amber-900 border-amber-200'
                                 : 'bg-teal-50 text-teal-800 border-teal-200'
                             }`}
                           >
-                            {crit.type === 'plus_minus'
+                            {crit.type === 'plus_minus_average'
+                              ? '📊 Artı / Eksi Ortalama'
+                              : crit.type === 'plus_minus'
                               ? `➕➖ ±${crit.stepPoints || 10} Puan Adımlı`
                               : '🔢 Puan Bazlı (0-100)'}
                           </span>
@@ -299,6 +342,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                           setEditDesc(crit.description || '');
                           setEditType(crit.type || 'score');
                           setEditStepPoints(crit.stepPoints || 10);
+                          setEditTargetCount(crit.targetCount);
                         }}
                         className="w-7 h-7 rounded-lg text-slate-400 hover:text-teal-700 hover:bg-teal-50 flex items-center justify-center transition-colors cursor-pointer"
                         title="Düzenle"
@@ -346,7 +390,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                 required
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Örn: Laboratuvar Uygulaması, Deneme Sınavı, Proje..."
+                placeholder="Örn: Ödev Takibi, Soru Çözümü, Derse Katılım..."
                 className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
                 autoFocus
               />
@@ -366,7 +410,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
                 Değerlendirme Tipi:
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setNewType('score')}
@@ -380,7 +424,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                     <span>🔢 Puan Bazlı (0-100)</span>
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">
-                    Öğrenciye doğrudan not verilir (örn: 85, 90, 75). Sınav, proje ve performanslar için idealdir.
+                    Öğrenciye doğrudan not verilir (örn: 85, 90). Sınav ve projeler için idealdir.
                   </div>
                 </button>
 
@@ -394,14 +438,44 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                   }`}
                 >
                   <div className="flex items-center gap-1.5 font-bold">
-                    <span>➕➖ +/- Adımlı Puan</span>
+                    <span>➕➖ +/- Adımlı</span>
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">
-                    100 puandan başlar; her ekside puan düşülür. Kitap kontrolü, MEBİ ve ders kuralları için idealdir.
+                    100 puandan başlar; her ekside puan düşülür (örn: -10).
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewType('plus_minus_average')}
+                  className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                    newType === 'plus_minus_average'
+                      ? 'border-emerald-500 bg-white ring-2 ring-emerald-500/20 text-emerald-950 font-bold shadow-xs'
+                      : 'border-slate-200 bg-white/70 text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                    <span>📊 +/- Ortalama</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Öğrenciye + ve - atılır; + ve - oranının ortalaması doğrudan puan olur (örn: 4+/1- = 80).
                   </div>
                 </button>
               </div>
             </div>
+
+            {/* Explanation box for plus_minus_average */}
+            {newType === 'plus_minus_average' && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950">
+                <span className="font-bold block mb-0.5">📊 Artı / Eksi Ortalama Formülü:</span>
+                <p className="text-[11px] text-emerald-800 leading-snug">
+                  Öğrenciye dilediğiniz kadar <strong>Artı (+)</strong> ve <strong>Eksi (-)</strong> verebilirsiniz.
+                  Sistem otomatik olarak: <code>(Artı Sayısı / Toplam Kontrol) × 100</code> formülüyle aritmetik ortalamasını not olarak hesaplar.
+                  <br />
+                  <em>Örnek: 4 Artı ve 1 Eksi alan bir öğrencinin notu %80 (80 puan) olur.</em>
+                </p>
+              </div>
+            )}
 
             {/* Step Points selector if plus_minus */}
             {newType === 'plus_minus' && (

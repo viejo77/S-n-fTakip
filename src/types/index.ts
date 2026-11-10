@@ -19,7 +19,7 @@ export interface CriterionScoreHistory {
   timestamp: string;
 }
 
-export type CriterionType = 'score' | 'plus_minus';
+export type CriterionType = 'score' | 'plus_minus' | 'plus_minus_average';
 
 export interface AssessmentCriterion {
   id: string;
@@ -27,8 +27,9 @@ export interface AssessmentCriterion {
   description?: string;
   defaultScore: number; // Starts at 100
   color?: string;
-  type?: CriterionType; // 'score': Doğrudan Puan Bazlı (0-100), 'plus_minus': +/- Adımlı (100'den düşmeli/eklemeli)
+  type?: CriterionType; // 'score': 0-100 doğrudan puan, 'plus_minus': +/- adımlı, 'plus_minus_average': + ve - ortalaması
   stepPoints?: number; // e.g. 5, 10, 15, 20
+  targetCount?: number; // e.g. 5, 10 (optional target total checks)
   maxScore?: number;
   isDefault?: boolean;
 }
@@ -50,6 +51,7 @@ export interface Student {
   criterionCalled?: Record<string, boolean>; // criterionId -> true if called in current round for this criterion
   criterionCalledCount?: Record<string, number>; // criterionId -> total count called for this criterion
   criteriaScores?: Record<string, number>; // criterionId -> score (0-100, default 100)
+  criteriaCounts?: Record<string, { plus: number; minus: number }>; // criterionId -> { plus, minus } counts for plus_minus_average
   criteriaHistory?: CriterionScoreHistory[];
 }
 

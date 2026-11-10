@@ -14,6 +14,8 @@ import { AssessmentCriterion, Student, CriterionScoreHistory } from '../types';
 import {
   getStudentCriterionScore,
   calculateStudentAverageGrade,
+  getStudentCriterionCounts,
+  calculatePlusMinusAverageScore,
 } from '../utils/criteria';
 
 interface StudentCriteriaModalProps {
@@ -26,6 +28,20 @@ interface StudentCriteriaModalProps {
     newScores: Record<string, number>,
     newHistoryItem?: CriterionScoreHistory
   ) => void;
+  onAdjustStudentCounts?: (
+    studentId: string,
+    criterionId: string,
+    deltaPlus: number,
+    deltaMinus: number,
+    reason?: string
+  ) => void;
+  onSetStudentCounts?: (
+    studentId: string,
+    criterionId: string,
+    exactPlus: number,
+    exactMinus: number,
+    reason?: string
+  ) => void;
 }
 
 export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
@@ -34,6 +50,8 @@ export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
   student,
   criteria,
   onUpdateScores,
+  onAdjustStudentCounts,
+  onSetStudentCounts,
 }) => {
   if (!isOpen || !student) return null;
 
@@ -277,6 +295,86 @@ export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
                         </button>
                       </div>
                     </div>
+                  ) : crit.type === 'plus_minus_average' ? (
+                    /* +/- Ortalama: Artı ve Eksi Sayıcıları & Canlı Oran */
+                    (() => {
+                      const counts = getStudentCriterionCounts(student, crit.id);
+                      const totalChecks = counts.plus + counts.minus;
+                      const ratioPercent = totalChecks === 0 ? 100 : Math.round((counts.plus / totalChecks) * 100);
+
+                      return (
+                        <div className="flex items-center justify-between w-full flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            {/* Plus Stepper */}
+                            <div className="flex items-center gap-1 bg-emerald-50/80 px-2 py-1 rounded-xl border border-emerald-200/80">
+                              <span className="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider">Artı (+)</span>
+                              <div className="flex items-center gap-1 ml-1">
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts && onAdjustStudentCounts(student.id, crit.id, -1, 0, reasonInputs[crit.id])}
+                                  disabled={counts.plus <= 0}
+                                  className="w-6 h-6 rounded-md bg-white border border-emerald-300 text-emerald-700 font-bold text-xs flex items-center justify-center hover:bg-emerald-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  title="1 Artı Azalt"
+                                >
+                                  -
+                                </button>
+                                <span className="font-mono font-black text-sm text-emerald-900 w-6 text-center">
+                                  {counts.plus}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts && onAdjustStudentCounts(student.id, crit.id, +1, 0, reasonInputs[crit.id])}
+                                  className="w-6 h-6 rounded-md bg-emerald-600 text-white font-bold text-xs flex items-center justify-center hover:bg-emerald-700 shadow-2xs cursor-pointer"
+                                  title="1 Artı Ekle"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Minus Stepper */}
+                            <div className="flex items-center gap-1 bg-rose-50/80 px-2 py-1 rounded-xl border border-rose-200/80">
+                              <span className="text-[11px] font-extrabold text-rose-800 uppercase tracking-wider">Eksi (-)</span>
+                              <div className="flex items-center gap-1 ml-1">
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts && onAdjustStudentCounts(student.id, crit.id, 0, -1, reasonInputs[crit.id])}
+                                  disabled={counts.minus <= 0}
+                                  className="w-6 h-6 rounded-md bg-white border border-rose-300 text-rose-700 font-bold text-xs flex items-center justify-center hover:bg-rose-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                  title="1 Eksi Azalt"
+                                >
+                                  -
+                                </button>
+                                <span className="font-mono font-black text-sm text-rose-900 w-6 text-center">
+                                  {counts.minus}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts && onAdjustStudentCounts(student.id, crit.id, 0, +1, reasonInputs[crit.id])}
+                                  className="w-6 h-6 rounded-md bg-rose-600 text-white font-bold text-xs flex items-center justify-center hover:bg-rose-700 shadow-2xs cursor-pointer"
+                                  title="1 Eksi Ekle"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick Reset Counts */}
+                          {(counts.plus > 0 || counts.minus > 0) && (
+                            <button
+                              type="button"
+                              onClick={() => onSetStudentCounts && onSetStudentCounts(student.id, crit.id, 0, 0, 'Sayımlar sıfırlandı')}
+                              className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 flex items-center gap-1 hover:underline cursor-pointer"
+                              title="+ ve - sayımlarını sıfırla"
+                            >
+                              <RotateCcw className="w-2.5 h-2.5" />
+                              <span>Sayımları Sıfırla</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()
                   ) : (
                     /* +/- Adımlı: Belirlenen Adım Puanı ile Hızlı Artırma / Azaltma */
                     <div className="flex items-center gap-1">

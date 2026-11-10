@@ -23,6 +23,7 @@ import { AssessmentCriterion, ClassGroup, Student } from '../types';
 import {
   getStudentCriterionScore,
   calculateStudentAverageGrade,
+  getStudentCriterionCounts,
 } from '../utils/criteria';
 
 interface CriteriaGradebookViewProps {
@@ -43,6 +44,20 @@ interface CriteriaGradebookViewProps {
     score: number,
     reason?: string
   ) => void;
+  onAdjustStudentCounts?: (
+    studentId: string,
+    criterionId: string,
+    deltaPlus: number,
+    deltaMinus: number,
+    reason?: string
+  ) => void;
+  onSetStudentCounts?: (
+    studentId: string,
+    criterionId: string,
+    exactPlus: number,
+    exactMinus: number,
+    reason?: string
+  ) => void;
   onOpenRandomPicker?: (criterionId?: string) => void;
 }
 
@@ -55,6 +70,8 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
   onOpenStudentCriteria,
   onQuickAdjustStudentScore,
   onSetStudentCriterionScore,
+  onAdjustStudentCounts,
+  onSetStudentCounts,
   onOpenRandomPicker,
 }) => {
   // Selected criterion: default to user's chosen isDefault criterion or first criterion!
@@ -432,7 +449,7 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                         <span>{crit.name}</span>
                       </div>
                       <span className="text-[10px] text-slate-400 font-normal block mt-0.5">
-                        ({crit.type === 'score' ? 'Puan' : `±${crit.stepPoints || 10}`})
+                        ({crit.type === 'plus_minus_average' ? '± Oran' : crit.type === 'score' ? 'Puan' : `±${crit.stepPoints || 10}`})
                       </span>
                     </th>
                   ))}
@@ -455,6 +472,7 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                       </td>
                       {criteria.map((crit) => {
                         const score = getStudentCriterionScore(st, crit.id);
+                        const counts = crit.type === 'plus_minus_average' ? getStudentCriterionCounts(st, crit.id) : null;
                         return (
                           <td key={crit.id} className="py-2.5 px-2 text-center">
                             <span
@@ -468,6 +486,11 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                             >
                               {score}
                             </span>
+                            {counts && (counts.plus > 0 || counts.minus > 0) && (
+                              <span className="block text-[9px] text-slate-400 font-mono">
+                                +{counts.plus}/-{counts.minus}
+                              </span>
+                            )}
                           </td>
                         );
                       })}
@@ -511,12 +534,16 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                   </h2>
                   <span
                     className={`text-xs font-bold px-2 py-0.5 rounded-md border ${
-                      activeCriterion.type === 'score'
+                      activeCriterion.type === 'plus_minus_average'
+                        ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                        : activeCriterion.type === 'score'
                         ? 'bg-indigo-100 text-indigo-900 border-indigo-200'
                         : 'bg-teal-100 text-teal-900 border-teal-200'
                     }`}
                   >
-                    {activeCriterion.type === 'score'
+                    {activeCriterion.type === 'plus_minus_average'
+                      ? '📊 Artı / Eksi Ortalama (Aritmetik Oran: %)'
+                      : activeCriterion.type === 'score'
                       ? '🔢 Doğrudan Puan Bazlı (0-100)'
                       : `➕➖ ±${activeCriterion.stepPoints || 10} Puan Adımlı`}
                   </span>
@@ -641,7 +668,115 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
 
                     {/* Right: Dynamic Scoring Controls (Tailored to Criterion Type) */}
                     <div className="flex items-center gap-2 shrink-0 flex-wrap justify-between md:justify-end border-t md:border-t-0 pt-2 md:pt-0 border-slate-100">
-                      {isScoreBased ? (
+                      {activeCriterion.type === 'plus_minus_average' ? (
+                        /* ================================================== */
+                        /* ARTI / EKSİ VE ARİTMETİK ORTALAMA CONTROLS         */
+                        /* ================================================== */
+                        (() => {
+                          const { plus, minus } = getStudentCriterionCounts(st, activeCriterion.id);
+                          const total = plus + minus;
+                          const ratio = total > 0 ? Math.round((plus / total) * 100) : 100;
+
+                          return (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Plus Stepper Counter */}
+                              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
+                                <span className="text-[11px] font-black text-emerald-800 uppercase">Artı:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts?.(st.id, activeCriterion.id, -1, 0)}
+                                  disabled={plus <= 0}
+                                  className="w-5 h-5 rounded-md bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center justify-center disabled:opacity-30 cursor-pointer"
+                                  title="1 Artı Azalt"
+                                >
+                                  -
+                                </button>
+                                <span className="font-mono font-black text-sm text-emerald-950 w-5 text-center">
+                                  {plus}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts?.(st.id, activeCriterion.id, +1, 0)}
+                                  className="w-5 h-5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center shadow-2xs cursor-pointer"
+                                  title="1 Artı Ekle"
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              {/* Minus Stepper Counter */}
+                              <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200/90 rounded-xl px-2.5 py-1 shadow-2xs">
+                                <span className="text-[11px] font-black text-rose-800 uppercase">Eksi:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts?.(st.id, activeCriterion.id, 0, -1)}
+                                  disabled={minus <= 0}
+                                  className="w-5 h-5 rounded-md bg-white hover:bg-rose-100 text-rose-800 border border-rose-300 font-bold text-xs flex items-center justify-center disabled:opacity-30 cursor-pointer"
+                                  title="1 Eksi Azalt"
+                                >
+                                  -
+                                </button>
+                                <span className="font-mono font-black text-sm text-rose-950 w-5 text-center">
+                                  {minus}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts?.(st.id, activeCriterion.id, 0, +1)}
+                                  className="w-5 h-5 rounded-md bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center shadow-2xs cursor-pointer"
+                                  title="1 Eksi Ekle"
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              {/* Average Ratio Result Badge */}
+                              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-xl">
+                                <div className="text-right">
+                                  <span className="text-[9px] font-bold text-slate-500 uppercase block leading-none">
+                                    Ortalama
+                                  </span>
+                                  <span
+                                    className={`font-mono font-black text-sm ${
+                                      ratio >= 85
+                                        ? 'text-emerald-700'
+                                        : ratio >= 60
+                                        ? 'text-amber-700'
+                                        : 'text-rose-700'
+                                    }`}
+                                  >
+                                    %{ratio}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  ({plus}/{total > 0 ? total : 0})
+                                </span>
+                              </div>
+
+                              {/* Quick One-Click Buttons */}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts?.(st.id, activeCriterion.id, +1, 0)}
+                                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                                  title="+1 Artı Ver"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Artı</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onAdjustStudentCounts?.(st.id, activeCriterion.id, 0, +1)}
+                                  className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                                  title="+1 Eksi Ver"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                  <span>Eksi</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : isScoreBased ? (
                         /* ===================================== */
                         /* PUAN BAZLI DEĞERLENDİRME CONTROLS     */
                         /* ===================================== */
