@@ -18,6 +18,8 @@ import {
   getStudentCriterionScore,
   calculatePlusMinusAverageScore,
   getStudentCriterionCounts,
+  calculateMultiScoreAverage,
+  getStudentCriterionSubScores,
 } from './utils/criteria';
 import {
   auth,
@@ -1090,13 +1092,84 @@ export default function App() {
     );
   };
 
+  const handleUpdateStudentSubScore = (
+    studentId: string,
+    criterionId: string,
+    scoreIndex: number,
+    value: number
+  ) => {
+    if (!activeClass) return;
+    const criterion = criteria.find((c) => c.id === criterionId);
+    const critName = criterion ? criterion.name : 'Ölçüt';
+    const subScoresCount = criterion?.subScoresCount || 2;
+    const clampedVal = Math.max(0, Math.min(100, Math.round(value)));
+
+    setClasses((prev) =>
+      prev.map((c) => {
+        if (c.id !== activeClass.id) return c;
+        return {
+          ...c,
+          students: c.students.map((st) => {
+            if (st.id !== studentId) return st;
+
+            const existingList = st.criteriaSubScores?.[criterionId] || [];
+            const nextList = Array.from({ length: subScoresCount }).map((_, idx) => {
+              if (idx === scoreIndex) return clampedVal;
+              return existingList[idx] !== undefined ? existingList[idx] : 100;
+            });
+
+            const newScore = calculateMultiScoreAverage(
+              nextList,
+              criterion?.defaultScore ?? 100
+            );
+
+            const newScores = {
+              ...(st.criteriaScores || {}),
+              [criterionId]: newScore,
+            };
+
+            const newSubScores = {
+              ...(st.criteriaSubScores || {}),
+              [criterionId]: nextList,
+            };
+
+            const historyItem: CriterionScoreHistory = {
+              id: 'h-' + Date.now(),
+              criterionId,
+              criterionName: critName,
+              change: 0,
+              newScore,
+              reason: `Performans/Not ${scoreIndex + 1} (${clampedVal}) girildi -> Yeni Ort: %${newScore}`,
+              timestamp: new Date().toLocaleTimeString('tr-TR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            };
+
+            return {
+              ...st,
+              criteriaScores: newScores,
+              criteriaSubScores: newSubScores,
+              criteriaHistory: [historyItem, ...(st.criteriaHistory || [])],
+              criterionCalled: {
+                ...(st.criterionCalled || {}),
+                [criterionId]: true,
+              },
+            };
+          }),
+        };
+      })
+    );
+  };
+
   const handleAddCriterion = (
     name: string,
     description: string,
     color: string,
     type: CriterionType,
     stepPoints: number,
-    targetCount?: number
+    targetCount?: number,
+    subScoresCount?: number
   ) => {
     const newCrit: AssessmentCriterion = {
       id: 'crit-' + Date.now(),
@@ -1107,6 +1180,7 @@ export default function App() {
       type,
       stepPoints,
       targetCount,
+      subScoresCount,
     };
     setCriteria((prev) => [...prev, newCrit]);
   };
@@ -1117,11 +1191,12 @@ export default function App() {
     description: string,
     type: CriterionType,
     stepPoints: number,
-    targetCount?: number
+    targetCount?: number,
+    subScoresCount?: number
   ) => {
     setCriteria((prev) =>
       prev.map((c) =>
-        c.id === id ? { ...c, name, description, type, stepPoints, targetCount } : c
+        c.id === id ? { ...c, name, description, type, stepPoints, targetCount, subScoresCount } : c
       )
     );
   };
@@ -1255,6 +1330,11 @@ export default function App() {
               setCurrentTab('gradebook');
               scrollToTop();
             }}
+            onQuickAdjustStudentScore={handleQuickAdjustStudentScore}
+            onSetStudentCriterionScore={handleSetStudentCriterionScore}
+            onAdjustStudentCounts={handleAdjustStudentCounts}
+            onSetStudentCounts={handleSetStudentCounts}
+            onUpdateStudentSubScore={handleUpdateStudentSubScore}
             timerMinutes={timerMinutes}
             timerSeconds={timerSeconds}
             isTimerRunning={isTimerRunning}
@@ -1279,6 +1359,7 @@ export default function App() {
             onSetStudentCriterionScore={handleSetStudentCriterionScore}
             onAdjustStudentCounts={handleAdjustStudentCounts}
             onSetStudentCounts={handleSetStudentCounts}
+            onUpdateStudentSubScore={handleUpdateStudentSubScore}
             onOpenRandomPicker={(criterionId) => {
               setRandomPickerCriterionId(criterionId || null);
               setIsRandomPickerOpen(true);
@@ -1359,6 +1440,7 @@ export default function App() {
         onUpdateScores={handleUpdateStudentScores}
         onAdjustStudentCounts={handleAdjustStudentCounts}
         onSetStudentCounts={handleSetStudentCounts}
+        onUpdateStudentSubScore={handleUpdateStudentSubScore}
         onOpenCriteriaModal={(student) => {
           setSelectedStudentForCriteria(student);
           setIsRandomPickerOpen(false);
@@ -1423,6 +1505,7 @@ export default function App() {
         onUpdateScores={handleUpdateStudentScores}
         onAdjustStudentCounts={handleAdjustStudentCounts}
         onSetStudentCounts={handleSetStudentCounts}
+        onUpdateStudentSubScore={handleUpdateStudentSubScore}
       />
 
       {/* Criteria Definition & Management Modal */}

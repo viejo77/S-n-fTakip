@@ -23,7 +23,8 @@ interface CriteriaManagementModalProps {
     color: string,
     type: CriterionType,
     stepPoints: number,
-    targetCount?: number
+    targetCount?: number,
+    subScoresCount?: number
   ) => void;
   onEditCriterion: (
     id: string,
@@ -31,7 +32,8 @@ interface CriteriaManagementModalProps {
     description: string,
     type: CriterionType,
     stepPoints: number,
-    targetCount?: number
+    targetCount?: number,
+    subScoresCount?: number
   ) => void;
   onDeleteCriterion: (id: string) => void;
   onResetToDefaults: () => void;
@@ -65,6 +67,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
   const [newType, setNewType] = useState<CriterionType>('score');
   const [newStepPoints, setNewStepPoints] = useState<number>(10);
   const [newTargetCount, setNewTargetCount] = useState<number | undefined>(undefined);
+  const [newSubScoresCount, setNewSubScoresCount] = useState<number>(2);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -72,6 +75,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
   const [editType, setEditType] = useState<CriterionType>('score');
   const [editStepPoints, setEditStepPoints] = useState<number>(10);
   const [editTargetCount, setEditTargetCount] = useState<number | undefined>(undefined);
+  const [editSubScoresCount, setEditSubScoresCount] = useState<number>(2);
 
   const [criterionToDelete, setCriterionToDelete] = useState<AssessmentCriterion | null>(
     null
@@ -88,11 +92,13 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
       newColor,
       newType,
       newStepPoints,
-      newTargetCount
+      newTargetCount,
+      newType === 'multi_score' ? newSubScoresCount : undefined
     );
     setNewName('');
     setNewDesc('');
     setNewTargetCount(undefined);
+    setNewSubScoresCount(2);
     setIsAdding(false);
   };
 
@@ -104,7 +110,8 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
       editDesc.trim(),
       editType,
       editStepPoints,
-      editTargetCount
+      editTargetCount,
+      editType === 'multi_score' ? editSubScoresCount : undefined
     );
     setEditingId(null);
   };
@@ -179,7 +186,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">
                         Değerlendirme Tipi:
                       </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
                         <button
                           type="button"
                           onClick={() => setEditType('score')}
@@ -189,8 +196,21 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                               : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="font-bold">🔢 Puan Bazlı</div>
-                          <div className="text-[10px] text-slate-500">Doğrudan not (0-100)</div>
+                          <div className="font-bold">🔢 Tek Puan (0-100)</div>
+                          <div className="text-[10px] text-slate-500">Doğrudan tek not</div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditType('multi_score')}
+                          className={`p-2 rounded-lg border text-left text-xs transition-all cursor-pointer ${
+                            editType === 'multi_score'
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-950 font-bold shadow-2xs ring-1 ring-indigo-500/30'
+                              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="font-bold text-indigo-900">📈 Çoklu Puan Ort.</div>
+                          <div className="text-[10px] text-slate-500">2-5 notun ortalaması (Performans 1, 2...)</div>
                         </button>
 
                         <button
@@ -220,6 +240,70 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                         </button>
                       </div>
                     </div>
+
+                    {editType === 'multi_score' && (
+                      <div className="p-3 rounded-xl bg-indigo-50/80 border border-indigo-200 text-xs text-indigo-950 space-y-2.5">
+                        <span className="font-bold block">📈 Çoklu Not / Performans Ortalaması:</span>
+                        <p className="text-[11px] text-indigo-900 leading-snug">
+                          Aynı ölçüt altında dilediğiniz sayıda puan bölümü açabilirsiniz (örn: Performans 1, 2, 3, 4...). Sistem tüm notların aritmetik ortalamasını otomatik hesaplar.
+                        </p>
+                        <div className="flex items-center gap-3 pt-1 border-t border-indigo-200/60 flex-wrap">
+                          <span className="text-[11px] font-bold text-indigo-900">Puan Bölümü Sayısı:</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditSubScoresCount((prev) => Math.max(2, prev - 1))}
+                              disabled={editSubScoresCount <= 2}
+                              className="w-7 h-7 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+                              title="1 Azalt"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min={2}
+                              max={20}
+                              value={editSubScoresCount}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val)) {
+                                  setEditSubScoresCount(Math.max(2, Math.min(20, val)));
+                                }
+                              }}
+                              className="w-14 text-center font-mono font-black text-sm py-1 rounded-lg border border-indigo-300 bg-white text-indigo-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setEditSubScoresCount((prev) => Math.min(20, prev + 1))}
+                              disabled={editSubScoresCount >= 20}
+                              className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold flex items-center justify-center hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+                              title="1 Artır"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Quick Preset Buttons */}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-[10px] text-indigo-500 font-semibold">Hızlı:</span>
+                            {[2, 3, 4, 5, 6, 8, 10].map((cnt) => (
+                              <button
+                                key={cnt}
+                                type="button"
+                                onClick={() => setEditSubScoresCount(cnt)}
+                                className={`px-2 py-0.5 rounded-md font-mono font-bold text-[11px] cursor-pointer transition-colors ${
+                                  editSubScoresCount === cnt
+                                    ? 'bg-indigo-600 text-white shadow-2xs'
+                                    : 'bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                }`}
+                              >
+                                {cnt}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {editType === 'plus_minus_average' && (
                       <div className="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-xs text-emerald-950">
@@ -291,6 +375,8 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                             className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md border ${
                               crit.type === 'plus_minus_average'
                                 ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                                : crit.type === 'multi_score'
+                                ? 'bg-indigo-50 text-indigo-900 border-indigo-200'
                                 : crit.type === 'plus_minus'
                                 ? 'bg-amber-50 text-amber-900 border-amber-200'
                                 : 'bg-teal-50 text-teal-800 border-teal-200'
@@ -298,9 +384,11 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                           >
                             {crit.type === 'plus_minus_average'
                               ? '📊 Artı / Eksi Ortalama'
+                              : crit.type === 'multi_score'
+                              ? `📈 Çoklu Puan Ort. (${crit.subScoresCount || 2} Not)`
                               : crit.type === 'plus_minus'
                               ? `➕➖ ±${crit.stepPoints || 10} Puan Adımlı`
-                              : '🔢 Puan Bazlı (0-100)'}
+                              : '🔢 Tek Puan (0-100)'}
                           </span>
                         </div>
                         {crit.description && (
@@ -343,6 +431,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                           setEditType(crit.type || 'score');
                           setEditStepPoints(crit.stepPoints || 10);
                           setEditTargetCount(crit.targetCount);
+                          setEditSubScoresCount(crit.subScoresCount || 2);
                         }}
                         className="w-7 h-7 rounded-lg text-slate-400 hover:text-teal-700 hover:bg-teal-50 flex items-center justify-center transition-colors cursor-pointer"
                         title="Düzenle"
@@ -410,7 +499,7 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
               <label className="text-[11px] font-bold text-slate-700 block mb-1">
                 Değerlendirme Tipi:
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={() => setNewType('score')}
@@ -421,10 +510,27 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                   }`}
                 >
                   <div className="flex items-center gap-1.5 font-bold">
-                    <span>🔢 Puan Bazlı (0-100)</span>
+                    <span>🔢 Tek Puan (0-100)</span>
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">
-                    Öğrenciye doğrudan not verilir (örn: 85, 90). Sınav ve projeler için idealdir.
+                    Öğrenciye doğrudan tek not verilir (örn: 85, 90).
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewType('multi_score')}
+                  className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer ${
+                    newType === 'multi_score'
+                      ? 'border-indigo-500 bg-white ring-2 ring-indigo-500/20 text-indigo-950 font-bold shadow-xs'
+                      : 'border-slate-200 bg-white/70 text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+                    <span>📈 Çoklu Puan Ort.</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    2-5 ayrı not (Performans 1, 2...). Sistem otomatik aritmetik ortalamasını alır.
                   </div>
                 </button>
 
@@ -463,6 +569,71 @@ export const CriteriaManagementModal: React.FC<CriteriaManagementModalProps> = (
                 </button>
               </div>
             </div>
+
+            {/* Explanation box for multi_score */}
+            {newType === 'multi_score' && (
+              <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950 space-y-2.5">
+                <span className="font-bold block">📈 Çoklu Puan / Performans Ödevi Ortalaması:</span>
+                <p className="text-[11px] text-indigo-900 leading-snug">
+                  Bu ölçüt seçildiğinde aynı ölçüt içerisinde dilediğiniz sayıda puan bölümü açabilirsiniz (örn: Performans 1, 2, 3, 4...). Sistem tüm notların aritmetik ortalamasını otomatik hesaplar.
+                </p>
+                <div className="flex items-center gap-3 pt-1 border-t border-indigo-200/60 flex-wrap">
+                  <span className="text-[11px] font-bold text-indigo-900">Puan Bölümü Sayısı:</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setNewSubScoresCount((prev) => Math.max(2, prev - 1))}
+                      disabled={newSubScoresCount <= 2}
+                      className="w-7 h-7 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+                      title="1 Azalt"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={newSubScoresCount}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!isNaN(val)) {
+                          setNewSubScoresCount(Math.max(2, Math.min(20, val)));
+                        }
+                      }}
+                      className="w-14 text-center font-mono font-black text-sm py-1 rounded-lg border border-indigo-300 bg-white text-indigo-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNewSubScoresCount((prev) => Math.min(20, prev + 1))}
+                      disabled={newSubScoresCount >= 20}
+                      className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold flex items-center justify-center hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+                      title="1 Artır"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] text-indigo-500 font-semibold">Hızlı:</span>
+                    {[2, 3, 4, 5, 6, 8, 10].map((cnt) => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        onClick={() => setNewSubScoresCount(cnt)}
+                        className={`px-2 py-0.5 rounded-md font-mono font-bold text-[11px] cursor-pointer transition-colors ${
+                          newSubScoresCount === cnt
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                        }`}
+                      >
+                        {cnt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Explanation box for plus_minus_average */}
             {newType === 'plus_minus_average' && (

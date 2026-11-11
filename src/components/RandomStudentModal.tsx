@@ -24,6 +24,7 @@ import {
   getStudentCriterionScore,
   calculateStudentAverageGrade,
   getStudentCriterionCounts,
+  getStudentCriterionSubScores,
 } from '../utils/criteria';
 
 interface RandomStudentModalProps {
@@ -54,6 +55,12 @@ interface RandomStudentModalProps {
     exactMinus: number,
     reason?: string
   ) => void;
+  onUpdateStudentSubScore?: (
+    studentId: string,
+    criterionId: string,
+    scoreIndex: number,
+    value: number
+  ) => void;
   onOpenCriteriaModal?: (student: Student) => void;
   onSetDefaultCriterion?: (criterionId: string) => void;
   onMarkStudentCalled: (studentId: string, criterionId?: string) => void;
@@ -72,6 +79,7 @@ export const RandomStudentModal: React.FC<RandomStudentModalProps> = ({
   onUpdateScores,
   onAdjustStudentCounts,
   onSetStudentCounts,
+  onUpdateStudentSubScore,
   onOpenCriteriaModal,
   onSetDefaultCriterion,
   onMarkStudentCalled,
@@ -773,6 +781,90 @@ export const RandomStudentModal: React.FC<RandomStudentModalProps> = ({
                             >
                               Sıfırla
                             </button>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : activeCriterion.type === 'multi_score' ? (
+                    (() => {
+                      const subScoresCount = activeCriterion.subScoresCount || 2;
+                      const subScores = liveStudent
+                        ? getStudentCriterionSubScores(liveStudent, activeCriterion.id)
+                        : [];
+                      const calculatedAvg = liveStudent
+                        ? getStudentCriterionScore(liveStudent, activeCriterion.id, activeCriterion)
+                        : 100;
+
+                      return (
+                        <div className="space-y-2.5 pt-0.5">
+                          <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-indigo-900">
+                                Çoklu Not Girişi ({subScoresCount} Not):
+                              </span>
+                              <span className="text-xs font-mono font-black text-indigo-900 bg-white px-2 py-0.5 rounded-md border border-indigo-200">
+                                Ort: {calculatedAvg} / 100
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {Array.from({ length: subScoresCount }).map((_, idx) => {
+                                const val = subScores[idx] !== undefined ? subScores[idx] : 100;
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="p-1.5 rounded-lg bg-white border border-indigo-200/80 shadow-2xs space-y-1"
+                                  >
+                                    <div className="flex items-center justify-between text-[10px] font-bold text-indigo-800">
+                                      <span>Not {idx + 1}:</span>
+                                      <span className="font-mono">{val}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={val}
+                                        onChange={(e) => {
+                                          const parsed = parseInt(e.target.value, 10);
+                                          if (!isNaN(parsed) && liveStudent && onUpdateStudentSubScore) {
+                                            onUpdateStudentSubScore(
+                                              liveStudent.id,
+                                              activeCriterion.id,
+                                              idx,
+                                              Math.max(0, Math.min(100, parsed))
+                                            );
+                                          }
+                                        }}
+                                        className="w-full text-center font-mono font-bold text-xs py-1 rounded bg-slate-50 border border-slate-200 focus:bg-white focus:ring-1 focus:ring-indigo-500"
+                                      />
+                                    </div>
+                                    {/* Quick Preset Buttons */}
+                                    <div className="flex items-center justify-center gap-0.5 pt-0.5">
+                                      {[100, 85, 70, 50].map((quick) => (
+                                        <button
+                                          key={quick}
+                                          type="button"
+                                          onClick={() => {
+                                            if (liveStudent && onUpdateStudentSubScore) {
+                                              onUpdateStudentSubScore(
+                                                liveStudent.id,
+                                                activeCriterion.id,
+                                                idx,
+                                                quick
+                                              );
+                                            }
+                                          }}
+                                          className="text-[9px] font-mono px-1 py-0.2 rounded bg-slate-100 hover:bg-indigo-100 text-slate-700 hover:text-indigo-900 border border-slate-200 cursor-pointer"
+                                        >
+                                          {quick}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       );

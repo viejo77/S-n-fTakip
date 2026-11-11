@@ -72,6 +72,36 @@ export const calculatePlusMinusAverageScore = (
 };
 
 /**
+ * Returns student's sub-scores array for a specific multi_score criterion.
+ */
+export const getStudentCriterionSubScores = (
+  student: Student,
+  criterionId: string
+): number[] => {
+  if (student.criteriaSubScores && Array.isArray(student.criteriaSubScores[criterionId])) {
+    return student.criteriaSubScores[criterionId].map((val) =>
+      typeof val === 'number' && !isNaN(val) ? Math.max(0, Math.min(100, Math.round(val))) : 0
+    );
+  }
+  return [];
+};
+
+/**
+ * Calculates arithmetic average of multiple scores (0-100).
+ * E.g. [80, 90] -> (80 + 90) / 2 = 85.
+ * If list is empty, returns defaultScore (defaults to 100).
+ */
+export const calculateMultiScoreAverage = (
+  scores: number[],
+  defaultScore: number = 100
+): number => {
+  const validScores = scores.filter((s) => typeof s === 'number' && !isNaN(s));
+  if (validScores.length === 0) return defaultScore;
+  const sum = validScores.reduce((acc, curr) => acc + curr, 0);
+  return Math.round(sum / validScores.length);
+};
+
+/**
  * Returns a student's score for a specific criterion, defaulting to 100 if not yet modified.
  */
 export const getStudentCriterionScore = (
@@ -83,6 +113,13 @@ export const getStudentCriterionScore = (
     const { plus, minus } = getStudentCriterionCounts(student, criterionId);
     if (plus + minus > 0) {
       return calculatePlusMinusAverageScore(plus, minus, criterion.defaultScore ?? 100);
+    }
+  }
+
+  if (criterion?.type === 'multi_score') {
+    const subScores = getStudentCriterionSubScores(student, criterionId);
+    if (subScores.length > 0) {
+      return calculateMultiScoreAverage(subScores, criterion.defaultScore ?? 100);
     }
   }
 

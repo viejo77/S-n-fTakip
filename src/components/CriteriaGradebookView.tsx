@@ -24,6 +24,7 @@ import {
   getStudentCriterionScore,
   calculateStudentAverageGrade,
   getStudentCriterionCounts,
+  getStudentCriterionSubScores,
 } from '../utils/criteria';
 
 interface CriteriaGradebookViewProps {
@@ -58,6 +59,12 @@ interface CriteriaGradebookViewProps {
     exactMinus: number,
     reason?: string
   ) => void;
+  onUpdateStudentSubScore?: (
+    studentId: string,
+    criterionId: string,
+    scoreIndex: number,
+    value: number
+  ) => void;
   onOpenRandomPicker?: (criterionId?: string) => void;
 }
 
@@ -72,6 +79,7 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
   onSetStudentCriterionScore,
   onAdjustStudentCounts,
   onSetStudentCounts,
+  onUpdateStudentSubScore,
   onOpenRandomPicker,
 }) => {
   // Selected criterion: default to user's chosen isDefault criterion or first criterion!
@@ -449,7 +457,13 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                         <span>{crit.name}</span>
                       </div>
                       <span className="text-[10px] text-slate-400 font-normal block mt-0.5">
-                        ({crit.type === 'plus_minus_average' ? '± Oran' : crit.type === 'score' ? 'Puan' : `±${crit.stepPoints || 10}`})
+                        ({crit.type === 'plus_minus_average'
+                          ? '± Oran'
+                          : crit.type === 'multi_score'
+                          ? `${crit.subScoresCount || 2} Not Ort.`
+                          : crit.type === 'score'
+                          ? 'Puan'
+                          : `±${crit.stepPoints || 10}`})
                       </span>
                     </th>
                   ))}
@@ -473,6 +487,7 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                       {criteria.map((crit) => {
                         const score = getStudentCriterionScore(st, crit.id);
                         const counts = crit.type === 'plus_minus_average' ? getStudentCriterionCounts(st, crit.id) : null;
+                        const subScores = crit.type === 'multi_score' ? getStudentCriterionSubScores(st, crit.id) : null;
                         return (
                           <td key={crit.id} className="py-2.5 px-2 text-center">
                             <span
@@ -489,6 +504,11 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                             {counts && (counts.plus > 0 || counts.minus > 0) && (
                               <span className="block text-[9px] text-slate-400 font-mono">
                                 +{counts.plus}/-{counts.minus}
+                              </span>
+                            )}
+                            {subScores && subScores.length > 0 && (
+                              <span className="block text-[9px] text-indigo-600 font-mono" title={subScores.join(', ')}>
+                                [{subScores.join('/')}]
                               </span>
                             )}
                           </td>
@@ -536,15 +556,19 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                     className={`text-xs font-bold px-2 py-0.5 rounded-md border ${
                       activeCriterion.type === 'plus_minus_average'
                         ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
-                        : activeCriterion.type === 'score'
+                        : activeCriterion.type === 'multi_score'
                         ? 'bg-indigo-100 text-indigo-900 border-indigo-200'
+                        : activeCriterion.type === 'score'
+                        ? 'bg-sky-100 text-sky-900 border-sky-200'
                         : 'bg-teal-100 text-teal-900 border-teal-200'
                     }`}
                   >
                     {activeCriterion.type === 'plus_minus_average'
                       ? '📊 Artı / Eksi Ortalama (Aritmetik Oran: %)'
+                      : activeCriterion.type === 'multi_score'
+                      ? `📈 Çoklu Not Ortalaması (${activeCriterion.subScoresCount || 2} Not Girişi)`
                       : activeCriterion.type === 'score'
-                      ? '🔢 Doğrudan Puan Bazlı (0-100)'
+                      ? '🔢 Doğrudan Tek Puan (0-100)'
                       : `➕➖ ±${activeCriterion.stepPoints || 10} Puan Adımlı`}
                   </span>
                 </div>
@@ -772,6 +796,75 @@ export const CriteriaGradebookView: React.FC<CriteriaGradebookViewProps> = ({
                                   <Minus className="w-3.5 h-3.5" />
                                   <span>Eksi</span>
                                 </button>
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : activeCriterion.type === 'multi_score' ? (
+                        /* ================================================== */
+                        /* ÇOKLU PUAN (PERFORMANS 1, 2...) ORTALAMASI CONTROLS */
+                        /* ================================================== */
+                        (() => {
+                          const subScoresCount = activeCriterion.subScoresCount || 2;
+                          const currentSubScores = getStudentCriterionSubScores(st, activeCriterion.id);
+                          const calculatedAvg = getStudentCriterionScore(st, activeCriterion.id, activeCriterion);
+
+                          return (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Sub-score Inputs */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {Array.from({ length: subScoresCount }).map((_, idx) => {
+                                  const val = currentSubScores[idx] !== undefined ? currentSubScores[idx] : 100;
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="flex items-center gap-1 bg-indigo-50/70 border border-indigo-200/90 rounded-xl px-2 py-1 shadow-2xs"
+                                    >
+                                      <span className="text-[10px] font-bold text-indigo-700 whitespace-nowrap">
+                                        P{idx + 1}:
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={val}
+                                        onChange={(e) => {
+                                          const parsed = parseInt(e.target.value, 10);
+                                          if (!isNaN(parsed) && onUpdateStudentSubScore) {
+                                            onUpdateStudentSubScore(
+                                              st.id,
+                                              activeCriterion.id,
+                                              idx,
+                                              Math.max(0, Math.min(100, parsed))
+                                            );
+                                          }
+                                        }}
+                                        className="w-11 text-center font-mono font-black text-xs text-indigo-950 bg-white rounded-lg border border-indigo-200 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Calculated Average Result Badge */}
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 border border-slate-200 rounded-xl">
+                                <div className="text-right">
+                                  <span className="text-[9px] font-bold text-slate-500 uppercase block leading-none">
+                                    Ortalama
+                                  </span>
+                                  <span
+                                    className={`font-mono font-black text-sm ${
+                                      calculatedAvg >= 85
+                                        ? 'text-emerald-700'
+                                        : calculatedAvg >= 60
+                                        ? 'text-amber-700'
+                                        : 'text-rose-700'
+                                    }`}
+                                  >
+                                    {calculatedAvg}
+                                  </span>
+                                </div>
+                                <span className="text-xs font-bold text-slate-400">/ 100</span>
                               </div>
                             </div>
                           );

@@ -16,6 +16,7 @@ import {
   calculateStudentAverageGrade,
   getStudentCriterionCounts,
   calculatePlusMinusAverageScore,
+  getStudentCriterionSubScores,
 } from '../utils/criteria';
 
 interface StudentCriteriaModalProps {
@@ -42,6 +43,12 @@ interface StudentCriteriaModalProps {
     exactMinus: number,
     reason?: string
   ) => void;
+  onUpdateStudentSubScore?: (
+    studentId: string,
+    criterionId: string,
+    scoreIndex: number,
+    value: number
+  ) => void;
 }
 
 export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
@@ -52,6 +59,7 @@ export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
   onUpdateScores,
   onAdjustStudentCounts,
   onSetStudentCounts,
+  onUpdateStudentSubScore,
 }) => {
   if (!isOpen || !student) return null;
 
@@ -144,10 +152,10 @@ export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-100 my-8 animate-in zoom-in-95 duration-150 relative">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2.5 sm:p-4 bg-slate-900/65 backdrop-blur-xs overflow-y-auto overscroll-contain animate-in fade-in duration-150">
+      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 flex flex-col max-h-[92vh] sm:max-h-[88vh] my-auto relative animate-in zoom-in-95 duration-150 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <div
@@ -168,15 +176,17 @@ export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer shrink-0"
             aria-label="Kapat"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Live Average Note Banner */}
-        <div className="my-4 p-4 rounded-2xl bg-gradient-to-r from-teal-50 via-sky-50 to-indigo-50 border border-teal-100 flex items-center justify-between">
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {/* Live Average Note Banner */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-50 via-sky-50 to-indigo-50 border border-teal-100 flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider block">
               Genel Not Ortalaması
@@ -375,6 +385,51 @@ export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
                         </div>
                       );
                     })()
+                  ) : crit.type === 'multi_score' ? (
+                    /* Çoklu Puan (Performans 1, 2...) Not Girişi */
+                    (() => {
+                      const subScoresCount = crit.subScoresCount || 2;
+                      const subScores = getStudentCriterionSubScores(student, crit.id);
+                      return (
+                        <div className="w-full space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-indigo-700 font-bold mr-1">Notlar:</span>
+                            {Array.from({ length: subScoresCount }).map((_, idx) => {
+                              const val = subScores[idx] !== undefined ? subScores[idx] : 100;
+                              return (
+                                <div
+                                  key={idx}
+                                  className="flex items-center gap-1 bg-indigo-50/80 border border-indigo-200 px-2 py-1 rounded-lg"
+                                >
+                                  <span className="text-[10px] font-bold text-indigo-800">P{idx + 1}:</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={val}
+                                    onChange={(e) => {
+                                      const parsed = parseInt(e.target.value, 10);
+                                      if (!isNaN(parsed) && onUpdateStudentSubScore) {
+                                        onUpdateStudentSubScore(
+                                          student.id,
+                                          crit.id,
+                                          idx,
+                                          Math.max(0, Math.min(100, parsed))
+                                        );
+                                      }
+                                    }}
+                                    className="w-12 text-center font-mono font-bold text-xs bg-white rounded border border-indigo-200 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-slate-400 italic">
+                            * Bu {subScoresCount} notun aritmetik ortalaması otomatik olarak ölçüt puanı (%{currentScore}) yapılır.
+                          </p>
+                        </div>
+                      );
+                    })()
                   ) : (
                     /* +/- Adımlı: Belirlenen Adım Puanı ile Hızlı Artırma / Azaltma */
                     <div className="flex items-center gap-1">
@@ -499,8 +554,10 @@ export const StudentCriteriaModal: React.FC<StudentCriteriaModalProps> = ({
           </div>
         )}
 
+        </div>
+
         {/* Footer */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end">
+        <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50/70 shrink-0 flex items-center justify-end">
           <button
             type="button"
             onClick={onClose}
