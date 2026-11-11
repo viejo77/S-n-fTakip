@@ -27,7 +27,6 @@ import {
   logOut,
   saveWorkspaceToCloud,
   fetchWorkspaceFromCloud,
-  subscribeToWorkspace,
   testConnection,
 } from './services/firebase';
 import { User, onAuthStateChanged } from 'firebase/auth';
@@ -137,9 +136,11 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   const [isCloudConnected, setIsCloudConnected] = useState(false);
+  const [lastCloudBackupTime, setLastCloudBackupTime] = useState<string | null>(null);
   const isInitialCloudSyncDoneRef = useRef(false);
   const isSavingToCloudRef = useRef(false);
   const lastCloudUpdateTimestampRef = useRef<string>('');
+  const hasPendingCloudChangesRef = useRef(false);
 
   // Sync to LocalStorage & generate smart share link with state
   const handleSyncToLink = () => {
@@ -240,6 +241,15 @@ export default function App() {
           setCriteria(cloudData.criteria || []);
           if (cloudData.classes[0]?.id) setActiveClassId(cloudData.classes[0].id);
           lastCloudUpdateTimestampRef.current = cloudData.updatedAt || '';
+          if (cloudData.updatedAt) {
+            try {
+              const d = new Date(cloudData.updatedAt);
+              setLastCloudBackupTime(d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }));
+            } catch {
+              // ignore invalid date
+            }
+          }
+          hasPendingCloudChangesRef.current = false;
           setGlobalToast({
             message: `✓ Bulut veritabanı bağlandı! (${cloudData.classes.length} sınıf eşitlendi)`,
             type: 'success',
@@ -252,6 +262,9 @@ export default function App() {
             scheduleSlots,
             criteria,
           });
+          hasPendingCloudChangesRef.current = false;
+          const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          setLastCloudBackupTime(timeStr);
           setGlobalToast({
             message: '✓ Sınıflarınız ve öğrencileriniz Google Firebase bulutuna kaydedildi!',
             type: 'success',
@@ -269,45 +282,12 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Realtime Cloud Synchronization across Devices (Computer, Phone, Tablet)
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const unsubscribeRealtime = subscribeToWorkspace(
-      currentUser.uid,
-      (cloudData) => {
-        // If we are currently saving to cloud ourselves, ignore our own echo
-        if (isSavingToCloudRef.current) return;
-
-        if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
-          if (cloudData.updatedAt && cloudData.updatedAt === lastCloudUpdateTimestampRef.current) {
-            return;
-          }
-          lastCloudUpdateTimestampRef.current = cloudData.updatedAt || '';
-          setSchoolInfo(cloudData.schoolInfo);
-          setClasses(cloudData.classes);
-          setScheduleSlots(cloudData.scheduleSlots || []);
-          setCriteria(cloudData.criteria || []);
-          setGlobalToast({
-            message: `✓ Cihazlar arası bulut senkronizasyonu güncellendi! (${cloudData.classes.length} sınıf)`,
-            type: 'success',
-          });
-        }
-      },
-      (err) => {
-        console.error('Realtime sync listener error:', err);
-      }
-    );
-
-    return () => unsubscribeRealtime();
-  }, [currentUser]);
-
   // 40-minute Lesson Timer
   const [timerMinutes, setTimerMinutes] = useState(40);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  // Sync to LocalStorage & Firebase Cloud (when logged in)
+  // Sync to LocalStorage immediately on every local change (instant & offline safe)
   useEffect(() => {
     try {
       const stateToSave = {
@@ -318,36 +298,58 @@ export default function App() {
         lastUpdated: new Date().toISOString(),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+      // Mark that we have unsaved local changes to be backed up to the cloud on the 5-min cycle
+      if (isInitialCloudSyncDoneRef.current) {
+        hasPendingCloudChangesRef.current = true;
+      }
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
+  }, [schoolInfo, classes, scheduleSlots, criteria]);
 
-    // Only auto-save to cloud if user is logged in AND initial cloud fetch has completed!
-    if (currentUser && isInitialCloudSyncDoneRef.current) {
-      const timer = setTimeout(async () => {
-        try {
-          isSavingToCloudRef.current = true;
-          setIsCloudSyncing(true);
-          const timestamp = new Date().toISOString();
-          lastCloudUpdateTimestampRef.current = timestamp;
-          await saveWorkspaceToCloud(currentUser.uid, {
-            schoolInfo,
-            classes,
-            scheduleSlots,
-            criteria,
-          });
-        } catch (e) {
-          console.error('Failed to sync to cloud:', e);
-        } finally {
-          setTimeout(() => {
-            setIsCloudSyncing(false);
-            isSavingToCloudRef.current = false;
-          }, 400);
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [schoolInfo, classes, scheduleSlots, criteria, currentUser]);
+  // Periodic Cloud Backup Every 5 Minutes (User Request: "anlık güncelleme yapmasın 5 dkya bir yedeklesin")
+  useEffect(() => {
+    if (!currentUser || !isInitialCloudSyncDoneRef.current) return;
+
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
+    const backupInterval = setInterval(async () => {
+      // Only backup if there are actual unsaved changes and not currently writing
+      if (!hasPendingCloudChangesRef.current || isSavingToCloudRef.current) return;
+
+      try {
+        isSavingToCloudRef.current = true;
+        setIsCloudSyncing(true);
+        const timestamp = new Date().toISOString();
+        lastCloudUpdateTimestampRef.current = timestamp;
+        await saveWorkspaceToCloud(currentUser.uid, {
+          schoolInfo,
+          classes,
+          scheduleSlots,
+          criteria,
+        });
+        hasPendingCloudChangesRef.current = false;
+        const timeStr = new Date().toLocaleTimeString('tr-TR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        setLastCloudBackupTime(timeStr);
+        setGlobalToast({
+          message: `✓ 5 dakikalık otomatik bulut yedeği alındı (${timeStr})`,
+          type: 'success',
+        });
+      } catch (e) {
+        console.warn('5-minute backup notice:', e);
+      } finally {
+        setTimeout(() => {
+          setIsCloudSyncing(false);
+          isSavingToCloudRef.current = false;
+        }, 400);
+      }
+    }, FIVE_MINUTES_MS);
+
+    return () => clearInterval(backupInterval);
+  }, [currentUser, schoolInfo, classes, scheduleSlots, criteria]);
 
   // Auth & Cloud Action Handlers
   const handleSignInWithGoogle = async () => {
@@ -428,8 +430,11 @@ export default function App() {
         scheduleSlots,
         criteria,
       });
+      hasPendingCloudChangesRef.current = false;
+      const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      setLastCloudBackupTime(timeStr);
       setGlobalToast({
-        message: '✓ Tüm sınıflar ve öğrenciler Google Firebase bulutuna kaydedildi!',
+        message: `✓ Tüm sınıflar ve öğrenciler buluta yedeklendi! (${timeStr})`,
         type: 'success',
       });
     } catch (e) {
@@ -1260,6 +1265,7 @@ export default function App() {
         onSignInWithGoogle={handleSignInWithGoogle}
         onSaveToCloud={handleManualSaveToCloud}
         isCloudSyncing={isCloudSyncing}
+        lastCloudBackupTime={lastCloudBackupTime}
       />
 
       {/* Main Content Area */}
@@ -1422,6 +1428,7 @@ export default function App() {
         onFetchFromCloud={handleFetchFromCloud}
         isCloudSyncing={isCloudSyncing}
         onOpenDomainHelp={() => setIsDomainGuideOpen(true)}
+        lastCloudBackupTime={lastCloudBackupTime}
       />
 
       {/* Random Student Modal */}

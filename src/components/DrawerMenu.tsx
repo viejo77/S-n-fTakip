@@ -49,6 +49,7 @@ interface DrawerMenuProps {
   onFetchFromCloud?: () => void;
   isCloudSyncing?: boolean;
   onOpenDomainHelp?: () => void;
+  lastCloudBackupTime?: string | null;
 }
 
 export const DrawerMenu: React.FC<DrawerMenuProps> = ({
@@ -74,6 +75,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
   onFetchFromCloud,
   isCloudSyncing = false,
   onOpenDomainHelp,
+  lastCloudBackupTime,
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -224,7 +226,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
                 <div className="flex items-center justify-between pt-0.5 px-0.5">
                   <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Bulut Aktif
+                    5 Dk Yedekleme Aktif {lastCloudBackupTime ? `(${lastCloudBackupTime})` : ''}
                   </span>
                   <button
                     onClick={onLogOut}

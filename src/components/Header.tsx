@@ -38,6 +38,7 @@ interface HeaderProps {
   onSignInWithGoogle?: () => void;
   onSaveToCloud?: () => void;
   isCloudSyncing?: boolean;
+  lastCloudBackupTime?: string | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -59,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSignInWithGoogle,
   onSaveToCloud,
   isCloudSyncing = false,
+  lastCloudBackupTime,
 }) => {
   const activeClass = classes.find((c) => c.id === activeClassId) || classes[0];
 
@@ -184,10 +186,16 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={onSaveToCloud}
                 disabled={isCloudSyncing}
                 className="p-1.5 sm:px-2.5 sm:py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer shrink-0 flex items-center gap-1.5"
-                title={`Google ile Bağlı (${currentUser.email}). Tıklayarak buluta manuel kaydedebilirsiniz.`}
+                title={`Google ile Bağlı (${currentUser.email}). Her 5 dakikada bir otomatik yedeklenir. Şimdi yedeklemek için tıklayın.`}
               >
                 <Cloud className={`w-3.5 h-3.5 text-teal-600 ${isCloudSyncing ? 'animate-bounce' : ''}`} />
-                <span className="hidden sm:inline">Bulut Eşit</span>
+                <span className="hidden sm:inline">
+                  {isCloudSyncing
+                    ? 'Yedekleniyor...'
+                    : lastCloudBackupTime
+                    ? `Yedek: ${lastCloudBackupTime}`
+                    : '5 Dk Yedek'}
+                </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               </button>
             ) : onSignInWithGoogle ? (
